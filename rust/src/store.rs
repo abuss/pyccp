@@ -1,3 +1,33 @@
+/// Bounds tracking for propagation reasoning (min/max per variable)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Bounds {
+    pub min: i64,
+    pub max: i64,
+}
+
+impl Bounds {
+    /// Create new bounds
+    pub fn new(min: i64, max: i64) -> Self {
+        Bounds { min, max }
+    }
+
+    /// Check if value is within bounds
+    pub fn contains(&self, value: i64) -> bool {
+        value >= self.min && value <= self.max
+    }
+
+    /// Intersect two bounds. Returns None if intersection is empty.
+    pub fn intersect(&self, other: &Bounds) -> Option<Bounds> {
+        let new_min = self.min.max(other.min);
+        let new_max = self.max.min(other.max);
+        if new_min <= new_max {
+            Some(Bounds::new(new_min, new_max))
+        } else {
+            None
+        }
+    }
+}
+
 /// Hybrid domain representation: Vec for small domains, BitSet for large ones
 #[derive(Debug, Clone, PartialEq)]
 pub enum Domain {
@@ -85,15 +115,26 @@ pub struct Store {
     trail: std::vec::Vec<(usize, i64)>,
     mrv_cache: Option<usize>,
     mrv_cache_valid: bool,
+    bounds: std::vec::Vec<Bounds>,
 }
 
 impl Store {
     pub fn new(domains: &[std::vec::Vec<i64>]) -> Store {
+        let mut bounds = std::vec::Vec::new();
+        for domain_vals in domains {
+            if let Some(&min_val) = domain_vals.first() {
+                if let Some(&max_val) = domain_vals.last() {
+                    bounds.push(Bounds::new(min_val, max_val));
+                }
+            }
+        }
+
         Store {
             cells: domains.iter().map(|d| Domain::new(d.clone())).collect(),
             trail: std::vec::Vec::new(),
             mrv_cache: None,
             mrv_cache_valid: false,
+            bounds,
         }
     }
 
@@ -197,6 +238,27 @@ impl Store {
 
     pub fn cells_unfixed(&self) -> usize {
         self.cells.iter().filter(|d| d.len() > 1).count()
+    }
+
+    pub fn bounds(&self, cell: usize) -> Bounds {
+        self.bounds[cell]
+    }
+
+    pub fn set_bounds(&mut self, cell: usize, b: Bounds) -> Result<(), Conflict> {
+        self.bounds[cell] = b;
+        self.invalidate_mrv_cache();
+        Ok(())
+    }
+
+    pub fn tighten_bounds(&mut self, cell: usize, new_bounds: Bounds) -> Result<(), Conflict> {
+        let current = self.bounds[cell];
+        if let Some(tightened) = current.intersect(&new_bounds) {
+            self.bounds[cell] = tightened;
+            self.invalidate_mrv_cache();
+            Ok(())
+        } else {
+            Err(Conflict)
+        }
     }
 }
 
