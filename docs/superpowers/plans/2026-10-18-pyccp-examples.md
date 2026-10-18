@@ -390,7 +390,9 @@ impl Propagator for Element {
         // ponytail: prunes only when idx or y is fixed; full bidirectional
         // domain intersection when needed.
         if store.is_fixed(self.idx) {
-            let c = self.array[store.value(self.idx) as usize];
+            let idx = store.value(self.idx);
+            if idx < 0 || idx as usize >= self.array.len() { return Err(Conflict); }
+            let c = self.array[idx as usize];
             if store.is_fixed(c) {
                 store.commit(self.y, store.value(c))?;
             } else {
@@ -437,6 +439,8 @@ impl Modulo { pub fn new(c: usize, m: i64, k: i64) -> Modulo { Modulo { cells: [
 impl Propagator for Modulo {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
+        // ponytail: full domain scan, no ceiling issue — single cell, exact.
+        if self.m == 0 { return Err(Conflict); }
         for v in store.domain(self.cells[0]).to_vec() {
             if v.rem_euclid(self.m) != self.k.rem_euclid(self.m) { store.remove(self.cells[0], v)?; }
         }
@@ -541,8 +545,12 @@ Python tuple shapes: `("lt", (i, j))`, `("mul", (i, j, k))`, `("element", ([arra
     args.get_item(0)?.extract()?, args.get_item(1)?.extract()?, args.get_item(2)?.extract()?)),
 "cardinality" => Ok(Constraint::Cardinality(
     args.get_item(0)?.extract()?, args.get_item(1)?.extract()?, args.get_item(2)?.extract()?)),
-"modulo" => Ok(Constraint::Modulo(
-    args.get_item(0)?.extract()?, args.get_item(1)?.extract()?, args.get_item(2)?.extract()?)),
+"modulo" => {
+    let m: i64 = args.get_item(1)?.extract()?;
+    if m == 0 { return Err(PyValueError::new_err("modulo divisor must be non-zero")); }
+    Ok(Constraint::Modulo(
+        args.get_item(0)?.extract()?, m, args.get_item(2)?.extract()?))
+}
 "and" | "or" | "xor" => {
     let kind = kind.clone();
     Ok(match kind.as_str() {

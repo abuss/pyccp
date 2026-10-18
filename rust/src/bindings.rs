@@ -47,8 +47,11 @@ fn parse_constraint(c: &Bound<'_, PyAny>, n: usize) -> PyResult<Constraint> {
             for &i in &cells { check(i)?; }
             Ok(Constraint::Cardinality(cells, args.get_item(1)?.extract()?, args.get_item(2)?.extract()?))
         }
-        "modulo" => Ok(Constraint::Modulo(
-            check(args.get_item(0)?.extract()?)?, args.get_item(1)?.extract()?, args.get_item(2)?.extract()?)),
+        "modulo" => {
+            let m: i64 = args.get_item(1)?.extract()?;
+            if m == 0 { return Err(PyValueError::new_err("modulo divisor must be non-zero")); }
+            Ok(Constraint::Modulo(check(args.get_item(0)?.extract()?)?, m, args.get_item(2)?.extract()?))
+        }
         "and" | "or" | "xor" => {
             let kind = kind.clone();
             let x = check(args.get_item(0)?.extract()?)?;

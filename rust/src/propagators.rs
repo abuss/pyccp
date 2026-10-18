@@ -162,7 +162,9 @@ impl Propagator for Element {
         // ponytail: prunes only when idx or y is fixed; full bidirectional
         // domain intersection when needed.
         if store.is_fixed(self.idx) {
-            let c = self.array[store.value(self.idx) as usize];
+            let idx = store.value(self.idx);
+            if idx < 0 || idx as usize >= self.array.len() { return Err(Conflict); }
+            let c = self.array[idx as usize];
             if store.is_fixed(c) {
                 store.commit(self.y, store.value(c))?;
             } else {
@@ -211,6 +213,7 @@ impl Propagator for Modulo {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
         // ponytail: full domain scan, no ceiling issue — single cell, exact.
+        if self.m == 0 { return Err(Conflict); }
         for v in store.domain(self.cells[0]).to_vec() {
             if v.rem_euclid(self.m) != self.k.rem_euclid(self.m) { store.remove(self.cells[0], v)?; }
         }
@@ -490,5 +493,21 @@ mod tests {
         r.add(Box::new(Xor::new(0, 1, 2)));
         r.fixpoint(&mut s).unwrap();
         assert_eq!(s.domain(1), &[0]);
+    }
+
+    #[test]
+    fn element_conflict_on_out_of_range_idx() {
+        let mut s = Store::new(&[vec![1], vec![2], vec![3], vec![3], vec![1]]);
+        let mut r = Registry::new();
+        r.add(Box::new(Element::new(vec![0, 1, 2], 3, 4)));
+        assert_eq!(r.fixpoint(&mut s), Err(Conflict));
+    }
+
+    #[test]
+    fn modulo_conflict_on_zero_divisor() {
+        let mut s = Store::new(&[vec![1, 2]]);
+        let mut r = Registry::new();
+        r.add(Box::new(Modulo::new(0, 0, 0)));
+        assert_eq!(r.fixpoint(&mut s), Err(Conflict));
     }
 }

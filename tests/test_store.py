@@ -28,3 +28,13 @@ def test_out_of_bounds_cell_raises_value_error():
         s._core.commit(99, 1)
     with pytest.raises(ValueError):
         s.post(("neq", (0, 99)))
+
+def test_element_out_of_range_idx_raises_conflict():
+    s = pyccp.Store([[1], [2], [3], [3], [1]])
+    with pytest.raises(pyccp.Conflict):
+        s.post(("element", ([0, 1, 2], 3, 4)))
+
+def test_modulo_zero_divisor_raises_value_error():
+    s = pyccp.Store([[1, 2]])
+    with pytest.raises(ValueError):
+        s.post(("modulo", (0, 0, 0)))
