@@ -1,0 +1,133 @@
+    Updating crates.io index
+     Locking 56 packages to latest compatible versions
+      Adding aho-corasick v1.1.5
+      Adding anes v0.1.6
+      Adding anstyle v1.0.14
+      Adding autocfg v1.5.1
+      Adding bumpalo v3.20.3
+      Adding cast v0.3.0
+      Adding cfg-if v1.0.5
+      Adding ciborium v0.2.2
+      Adding ciborium-io v0.2.2
+      Adding ciborium-ll v0.2.2
+      Adding clap v4.6.7
+      Adding clap_builder v4.6.7
+      Adding clap_lex v1.1.1
+      Adding criterion v0.5.1 (available: v0.8.2)
+      Adding criterion-plot v0.5.0
+      Adding crunchy v0.2.4
+      Adding futures-core v0.3.34
+      Adding futures-task v0.3.34
+      Adding futures-util v0.3.34
+      Adding half v2.7.1
+      Adding hermit-abi v0.5.3
+      Adding is-terminal v0.4.17
+      Adding itertools v0.10.5
+      Adding itoa v1.0.18
+      Adding js-sys v0.3.106
+      Adding memchr v2.8.3
+      Adding num-traits v0.2.19
+      Adding oorandom v11.1.5
+      Adding pin-project-lite v0.2.17
+      Adding plotters v0.3.7
+      Adding plotters-backend v0.3.7
+      Adding plotters-svg v0.3.7
+      Adding regex v1.13.1
+      Adding regex-automata v0.4.18
+      Adding regex-syntax v0.8.11
+      Adding rustversion v1.0.23
+      Adding same-file v1.0.6
+      Adding serde v1.0.229
+      Adding serde_core v1.0.229
+      Adding serde_derive v1.0.229
+      Adding serde_json v1.0.154
+      Adding slab v0.4.12
+      Adding syn v2.0.119
+      Adding tinytemplate v1.2.1
+      Adding walkdir v2.5.0
+      Adding wasm-bindgen v0.2.129
+      Adding wasm-bindgen-macro v0.2.129
+      Adding wasm-bindgen-macro-support v0.2.129
+      Adding wasm-bindgen-shared v0.2.129
+      Adding web-sys v0.3.106
+      Adding winapi-util v0.1.11
+      Adding windows-link v0.2.1
+      Adding windows-sys v0.61.2
+      Adding zerocopy v0.8.63
+      Adding zerocopy-derive v0.8.63
+      Adding zmij v1.0.23
+ Downloading crates ...
+  Downloaded clap_lex v1.1.1
+  Downloaded clap_builder v4.6.7
+  Downloaded zerocopy-derive v0.8.63
+  Downloaded serde_json v1.0.154
+  Downloaded clap v4.6.7
+  Downloaded zerocopy v0.8.63
+   Compiling proc-macro2 v1.0.107
+   Compiling serde_core v1.0.229
+   Compiling zerocopy v0.8.63
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling either v1.19.0
+   Compiling autocfg v1.5.1
+   Compiling serde_json v1.0.154
+   Compiling cfg-if v1.0.5
+   Compiling pyo3-ffi v0.30.1
+   Compiling regex-syntax v0.8.11
+   Compiling memchr v2.8.3
+   Compiling anstyle v1.0.14
+   Compiling plotters-backend v0.3.7
+   Compiling clap_lex v1.1.1
+   Compiling itoa v1.0.18
+   Compiling ciborium-io v0.2.2
+   Compiling clap_builder v4.6.7
+   Compiling itertools v0.10.5
+   Compiling rayon v1.12.0
+   Compiling num-traits v0.2.19
+   Compiling plotters-svg v0.3.7
+   Compiling pyo3 v0.30.1
+   Compiling same-file v1.0.6
+   Compiling cast v0.3.0
+   Compiling walkdir v2.5.0
+   Compiling is-terminal v0.4.17
+   Compiling quote v1.0.47
+   Compiling bitset-core v0.1.1
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling anes v0.1.6
+   Compiling oorandom v11.1.5
+   Compiling plotters v0.3.7
+   Compiling regex-automata v0.4.18
+   Compiling criterion-plot v0.5.0
+   Compiling clap v4.6.7
+   Compiling regex v1.13.1
+   Compiling zerocopy-derive v0.8.63
+   Compiling pyo3-macros-backend v0.30.1
+   Compiling serde_derive v1.0.229
+   Compiling tinytemplate v1.2.1
+   Compiling pyo3-macros v0.30.1
+   Compiling half v2.7.1
+   Compiling ciborium-ll v0.2.2
+   Compiling ciborium v0.2.2
+   Compiling criterion v0.5.1
+   Compiling pyccp-core v0.1.0 (/home/abuss/Work/devel/pyccp/.worktrees/v2.1-framework-upgrade/rust)
+    Finished `bench` profile [optimized] target(s) in 15.36s
+     Running benches/phase1_benchmark.rs (target/release/deps/phase1_benchmark-9bb42378c3844ce5)
+Gnuplot not found, using plotters backend
+Benchmarking nqueens_8
+Benchmarking nqueens_8: Warming up for 3.0000 s
+Benchmarking nqueens_8: Collecting 100 samples in estimated 5.6611 s (30k iterations)
+Benchmarking nqueens_8: Analyzing
+nqueens_8               time:   [185.56 µs 187.62 µs 189.86 µs]
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking nqueens_14
+Benchmarking nqueens_14: Warming up for 3.0000 s
+Benchmarking nqueens_14: Collecting 100 samples in estimated 5.2353 s (1000 iterations)
+Benchmarking nqueens_14: Analyzing
+nqueens_14              time:   [4.9372 ms 4.9763 ms 5.0183 ms]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+

@@ -11,3 +11,10 @@ crate-type = ["cdylib", "rlib"]
 pyo3 = { version = "0.30", features = ["extension-module"] }
 rayon = "1"
 bitset-core = "0.1"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "phase1_benchmark"
+harness = false
