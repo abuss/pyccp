@@ -392,24 +392,76 @@ impl Propagator for Xor {
     }
 }
 
-pub struct Registry { props: Vec<Box<dyn Propagator>> }
+pub struct Registry {
+    props: Vec<Box<dyn Propagator>>,
+    propagator_index: std::collections::HashMap<usize, Vec<usize>>,  // var_id -> [prop_ids]
+}
+
 impl Registry {
-    pub fn new() -> Registry { Registry { props: Vec::new() } }
-    pub fn add(&mut self, p: Box<dyn Propagator>) { self.props.push(p); }
+    pub fn new() -> Registry {
+        Registry {
+            props: Vec::new(),
+            propagator_index: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, p: Box<dyn Propagator>) {
+        let prop_id = self.props.len();
+        // Index the propagator by its variables
+        for &var in p.cells() {
+            self.propagator_index.entry(var)
+                .or_insert_with(Vec::new)
+                .push(prop_id);
+        }
+        self.props.push(p);
+    }
 
     pub fn propagators_involving(&self, cell: usize) -> Vec<usize> {
-        self.props.iter().enumerate()
-            .filter(|(_, p)| p.cells().contains(&cell))
-            .map(|(i, _)| i)
-            .collect()
+        self.propagator_index.get(&cell).cloned().unwrap_or_default()
+    }
+
+    /// Get propagator indices that touch any of the given variables
+    pub fn propagators_for_vars(&self, vars: &[usize]) -> Vec<usize> {
+        let mut propagators = std::collections::HashSet::new();
+        for &var in vars {
+            if let Some(props) = self.propagator_index.get(&var) {
+                for &prop_id in props {
+                    propagators.insert(prop_id);
+                }
+            }
+        }
+        propagators.into_iter().collect()
     }
 
     pub fn fixpoint(&mut self, store: &mut Store) -> Result<(), Conflict> {
+        // First iteration: run all propagators
+        let mut first_iteration = true;
+        
         loop {
-            let before = store.trail_len();
-            for p in &mut self.props { p.propagate(store)?; }
-            if store.trail_len() == before { return Ok(()); }
+            let changed_vars = if first_iteration {
+                // First time: mark all variables as changed to run all propagators
+                (0..store.num_variables()).collect::<Vec<_>>()
+            } else {
+                store.get_changed_vars()
+            };
+            
+            if changed_vars.is_empty() {
+                break;  // No more changes, fixpoint reached
+            }
+            
+            store.clear_changed_vars();
+            first_iteration = false;
+            
+            // Only propagate affected propagators
+            let affected_props = self.propagators_for_vars(&changed_vars);
+            
+            for prop_id in affected_props {
+                self.props[prop_id].propagate(store)?;
+            }
         }
+        
+        store.invalidate_mrv_cache();
+        Ok(())
     }
 }
 

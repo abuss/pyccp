@@ -116,6 +116,7 @@ pub struct Store {
     mrv_cache: Option<usize>,
     mrv_cache_valid: bool,
     bounds: std::vec::Vec<Bounds>,
+    changed_vars: std::collections::HashSet<usize>,  // Track which variables changed
 }
 
 impl Store {
@@ -135,6 +136,7 @@ impl Store {
             mrv_cache: None,
             mrv_cache_valid: false,
             bounds,
+            changed_vars: std::collections::HashSet::new(),
         }
     }
 
@@ -195,6 +197,7 @@ impl Store {
         let removed = self.cells[cell].remove(value);
         if removed {
             self.trail.push((cell, value));
+            self.changed_vars.insert(cell);  // Mark variable as changed
             self.invalidate_mrv_cache();
             if self.cells[cell].is_empty() {
                 return Err(Conflict);
@@ -229,6 +232,8 @@ impl Store {
                 }
             }
         }
+        // Clear changed_vars when undoing to avoid stale state
+        self.changed_vars.clear();
         self.invalidate_mrv_cache();
     }
 
@@ -259,6 +264,22 @@ impl Store {
         } else {
             Err(Conflict)
         }
+    }
+
+    pub fn get_changed_vars(&self) -> std::vec::Vec<usize> {
+        self.changed_vars.iter().copied().collect()
+    }
+
+    pub fn clear_changed_vars(&mut self) {
+        self.changed_vars.clear();
+    }
+
+    pub fn mark_var_changed(&mut self, var: usize) {
+        self.changed_vars.insert(var);
+    }
+
+    pub fn num_variables(&self) -> usize {
+        self.cells.len()
     }
 }
 
