@@ -31,7 +31,7 @@ impl Propagator for NeqLinear {
             let rem = self.k - sum;
             if rem % coef == 0 {
                 let v = rem / coef;
-                if store.domain(c).contains(&v) { store.remove(c, v)?; }
+                if store.domain(c).contains(v) { store.remove(c, v)?; }
             }
         }
         Ok(())
@@ -49,7 +49,7 @@ impl Propagator for AllDiff {
             if store.is_fixed(i) {
                 let v = store.value(i);
                 for &j in &self.cells {
-                    if j != i && store.domain(j).contains(&v) { store.remove(j, v)?; }
+                    if j != i && store.domain(j).contains(v) { store.remove(j, v)?; }
                 }
             }
         }
@@ -299,7 +299,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(NeqLinear::new(vec![(0, 1), (1, -1)], 0)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[2]);
+        assert_eq!(s.domain(0).to_vec(), &[2]);
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(NeqLinear::new(vec![(0, 1), (1, -1)], -1)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[1]);
+        assert_eq!(s.domain(1).to_vec(), &[1]);
     }
 
     #[test]
@@ -328,7 +328,7 @@ mod tests {
         s.commit(0, 1).unwrap();
         s.commit(1, 2).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(2), &[3]);
+        assert_eq!(s.domain(2).to_vec(), &[3]);
     }
 
     #[test]
@@ -339,7 +339,7 @@ mod tests {
         r.add(Box::new(LinearEq::new(vec![(1, 1), (0, -1)], 1)));
         s.commit(0, 1).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[2]);
+        assert_eq!(s.domain(1).to_vec(), &[2]);
     }
 
     #[test]
@@ -364,7 +364,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(NonZero::new(0)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[1, 2]);
+        assert_eq!(s.domain(0).to_vec(), &[1, 2]);
     }
 
     #[test]
@@ -374,7 +374,7 @@ mod tests {
         r.add(Box::new(LessThan::new(0, 1)));
         s.commit(1, 2).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[1]);
+        assert_eq!(s.domain(0).to_vec(), &[1]);
     }
 
     #[test]
@@ -392,7 +392,7 @@ mod tests {
         r.add(Box::new(Multiply::new(0, 1, 12)));
         s.commit(0, 2).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[6]);
+        assert_eq!(s.domain(1).to_vec(), &[6]);
     }
 
     #[test]
@@ -411,7 +411,7 @@ mod tests {
         r.add(Box::new(Element::new(vec![0, 1, 2], 3, 4)));
         s.commit(3, 0).unwrap();          // idx -> array[0] = 1
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(4), &[1]);
+        assert_eq!(s.domain(4).to_vec(), &[1]);
     }
 
     #[test]
@@ -429,8 +429,8 @@ mod tests {
         r.add(Box::new(Cardinality::new(vec![0, 1, 2], 3, 1)));
         s.commit(0, 3).unwrap();          // one equal -> others cannot be 3
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[4]);
-        assert_eq!(s.domain(2), &[4]);
+        assert_eq!(s.domain(1).to_vec(), &[4]);
+        assert_eq!(s.domain(2).to_vec(), &[4]);
     }
 
     #[test]
@@ -447,7 +447,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(Modulo::new(0, 3, 0)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[3, 6, 9]);
+        assert_eq!(s.domain(0).to_vec(), &[3, 6, 9]);
     }
 
     #[test]
@@ -464,8 +464,8 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(And::new(0, 1, 2)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[1]);
-        assert_eq!(s.domain(1), &[1]);
+        assert_eq!(s.domain(0).to_vec(), &[1]);
+        assert_eq!(s.domain(1).to_vec(), &[1]);
     }
 
     #[test]
@@ -483,7 +483,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(Or::new(0, 1, 2)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[0]);
+        assert_eq!(s.domain(1).to_vec(), &[0]);
     }
 
     #[test]
@@ -492,7 +492,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(Xor::new(0, 1, 2)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[0]);
+        assert_eq!(s.domain(1).to_vec(), &[0]);
     }
 
     #[test]
