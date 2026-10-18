@@ -422,15 +422,16 @@ impl Registry {
 
     /// Get propagator indices that touch any of the given variables
     pub fn propagators_for_vars(&self, vars: &[usize]) -> Vec<usize> {
-        let mut propagators = std::collections::HashSet::new();
+        let mut propagators = Vec::new();
         for &var in vars {
             if let Some(props) = self.propagator_index.get(&var) {
-                for &prop_id in props {
-                    propagators.insert(prop_id);
-                }
+                propagators.extend_from_slice(props);
             }
         }
-        propagators.into_iter().collect()
+        // Remove duplicates while preserving order
+        propagators.sort_unstable();
+        propagators.dedup();
+        propagators
     }
 
     pub fn fixpoint(&mut self, store: &mut Store) -> Result<(), Conflict> {
