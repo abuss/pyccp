@@ -59,6 +59,10 @@ impl PyStore {
         }
     }
 
+    fn solve_all(&mut self, limit: usize) -> Vec<Vec<i64>> {
+        self.solver.solve_all(limit)
+    }
+
     fn post(&mut self, py: Python, c: &Bound<'_, PyAny>) -> PyResult<()> {
         let c = parse_constraint(c, self.fixed_before.len())?;
         self.solver.post(c).map_err(to_pyerr)?;

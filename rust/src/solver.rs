@@ -24,6 +24,7 @@ pub trait Solver {
     fn post(&mut self, c: Constraint) -> Result<(), Conflict>;
     fn entails(&self, c: &Constraint) -> bool;
     fn solve(&mut self) -> Option<Vec<i64>>;
+    fn solve_all(&mut self, limit: usize) -> Vec<Vec<i64>>;
     fn commit(&mut self, cell: usize, value: i64) -> Result<(), Conflict>;
     fn is_fixed(&self, cell: usize) -> bool;
     fn value(&self, cell: usize) -> i64;
@@ -75,6 +76,12 @@ impl Solver for CustomSolver {
         self.dfs()
     }
 
+    fn solve_all(&mut self, limit: usize) -> Vec<Vec<i64>> {
+        let mut out = Vec::new();
+        self.collect(&mut out, limit);
+        out
+    }
+
     fn commit(&mut self, cell: usize, value: i64) -> Result<(), Conflict> {
         self.store.commit(cell, value)?;
         self.registry.fixpoint(&mut self.store)?;
@@ -104,6 +111,27 @@ impl CustomSolver {
             self.store.undo_to(m);
         }
         None
+    }
+
+    // Returns true when the limit is reached and the search must unwind.
+    fn collect(&mut self, out: &mut Vec<Vec<i64>>, limit: usize) -> bool {
+        if out.len() >= limit { return true; }
+        let cell = match self.store.first_open() {
+            Some(c) => c,
+            None => { out.push(self.store.assignment()); return out.len() >= limit; }
+        };
+        let domain: Vec<i64> = self.store.domain(cell).to_vec();
+        for &v in &domain {
+            let m = self.store.mark();
+            if self.store.commit(cell, v).is_ok()
+                && self.registry.fixpoint(&mut self.store).is_ok()
+                && self.collect(out, limit) {
+                self.store.undo_to(m);
+                return true;
+            }
+            self.store.undo_to(m);
+        }
+        false
     }
 
     pub fn solve_parallel(&mut self) -> Option<Vec<i64>> {
@@ -175,6 +203,27 @@ mod tests {
                 assert_ne!(sol[row] + row as i64, sol[col] + col as i64);
             }
         }
+    }
+
+    #[test]
+    fn solve_all_diophantine_pairs() {
+        // x + y == 10 over 0..=10 -> 11 solutions
+        let domains = vec![(0..11).collect(), (0..11).collect()];
+        let mut s = CustomSolver::new(&domains);
+        s.post(Constraint::LinearEq(vec![(0, 1), (1, 1)], 10)).unwrap();
+        let sols = s.solve_all(1000);
+        assert_eq!(sols.len(), 11);
+        for sol in &sols {
+            assert_eq!(sol[0] + sol[1], 10);
+        }
+    }
+
+    #[test]
+    fn solve_all_respects_limit() {
+        let domains = vec![(0..11).collect(), (0..11).collect()];
+        let mut s = CustomSolver::new(&domains);
+        s.post(Constraint::LinearEq(vec![(0, 1), (1, 1)], 10)).unwrap();
+        assert_eq!(s.solve_all(3).len(), 3);
     }
 
     #[test]

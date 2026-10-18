@@ -49,6 +49,11 @@ class Store:
     def solve(self) -> list[int] | None:
         return self._core.solve()
 
+    def solve_all(self, limit: int = 1000) -> list[list[int]]:
+        """All solutions in DFS order. Does not notify the bridge: enumeration
+        is branch-local, so mirrors cannot reflect it."""
+        return self._core.solve_all(limit)
+
     def _apply(self, cell: int, value) -> None:
         v = self._vars.get(cell)
         if v is None:
