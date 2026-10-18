@@ -1,0 +1,147 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/pyccp_core-8a760b134fbe1c9e)
+
+running 33 tests
+test propagators::tests::all_diff_prunes ... ok
+test propagators::tests::and_prunes ... ok
+test propagators::tests::and_conflict ... ok
+test propagators::tests::cardinality_conflict ... ok
+test propagators::tests::element_conflict ... ok
+test propagators::tests::element_conflict_on_out_of_range_idx ... ok
+test propagators::tests::element_prunes ... ok
+test propagators::tests::less_than_conflict ... ok
+test propagators::tests::cardinality_prunes ... ok
+test propagators::tests::less_than_prunes ... ok
+test propagators::tests::linear_eq_propagates ... ok
+test propagators::tests::linear_eq_zero_coef_is_conflict ... ok
+test propagators::tests::modulo_conflict ... ok
+test propagators::tests::modulo_conflict_on_zero_divisor ... ok
+test propagators::tests::modulo_prunes ... ok
+test propagators::tests::multiply_conflict ... ok
+test propagators::tests::multiply_prunes ... ok
+test propagators::tests::neq_linear_conflict_when_violated ... ok
+test propagators::tests::neq_linear_prunes_diagonal ... ok
+test propagators::tests::neq_linear_prunes_when_other_fixed ... ok
+test propagators::tests::neq_linear_zero_coef_is_conflict ... ok
+test propagators::tests::nonzero_prunes ... ok
+test propagators::tests::or_prunes ... ok
+test propagators::tests::xor_prunes ... ok
+test store::tests::commit_fixes_cell ... ok
+test solver::tests::solve_all_diophantine_pairs ... ok
+test solver::tests::solve_all_respects_limit ... ok
+test store::tests::empty_domain_is_conflict ... ok
+test store::tests::remove_and_undo ... ok
+test solver::tests::eight_queens ... ok
+test solver::tests::parallel_twelve_queens_is_valid ... ok
+test solver::tests::parallel_beats_sequential_14_queens ... ok
+test solver::tests::send_more_money ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.93s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/ac3_algorithm.rs (target/debug/deps/ac3_algorithm-295446d573c9f6ef)
+
+running 3 tests
+test test_ac3_conflict_no_support ... ok
+test test_ac3_removes_fixed_from_others ... ok
+test test_ac3_fixes_unique_supporters ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bounds_propagation.rs (target/debug/deps/bounds_propagation-f1ff14a2a51587f3)
+
+running 4 tests
+test test_less_than_conflict ... ok
+test test_less_than_bounds_prune ... ok
+test test_linear_eq_with_fixed_variable ... ok
+test test_linear_eq_bounds_conflict ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bounds_tracking.rs (target/debug/deps/bounds_tracking-0f3de704507726d9)
+
+running 4 tests
+test test_bounds_contains ... ok
+test test_bounds_initialized_from_domain ... ok
+test test_tighten_bounds_conflict ... ok
+test test_tighten_bounds_valid ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/domain_bitset.rs (target/debug/deps/domain_bitset-2cb80539fee17ad6)
+
+running 5 tests
+test domain_tests::domain_iter ... ok
+test domain_tests::domain_len_and_is_empty ... ok
+test domain_tests::domain_vec_creation_and_contains ... ok
+test domain_tests::domain_remove_value ... ok
+test domain_tests::domain_min_max ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lazy_queue.rs (target/debug/deps/lazy_queue-63004d19c1a29835)
+
+running 3 tests
+test test_lazy_queue_multi_constraint_interaction ... ok
+test test_lazy_queue_skips_unaffected ... ok
+test test_lazy_queue_cascading ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lcv_heuristic.rs (target/debug/deps/lcv_heuristic-a64beeb88da01692)
+
+running 2 tests
+test lcv_heuristic_tests::lcv_orders_values_by_propagator_count ... ok
+test lcv_heuristic_tests::lcv_solves_eight_queens ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/mrv_cache.rs (target/debug/deps/mrv_cache-0e147561e2266645)
+
+running 3 tests
+test mrv_cache_tests::cache_returns_same_value ... ok
+test mrv_cache_tests::cache_invalidated_after_remove ... ok
+test mrv_cache_tests::mrv_picks_smallest_unfixed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+============================= test session starts ==============================
+platform linux -- Python 3.14.8, pytest-9.1.1, pluggy-1.7.0 -- /home/abuss/Work/devel/pyccp/.worktrees/v2.1-framework-upgrade/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/abuss/Work/devel/pyccp/.worktrees/v2.1-framework-upgrade
+configfile: pyproject.toml
+collecting ... collected 31 items
+
+tests/test_agents.py::test_join_runs_agents_concurrently PASSED          [  3%]
+tests/test_agents.py::test_choice_first_wins_and_cancels_pending PASSED  [  6%]
+tests/test_agents.py::test_conflict_raises_in_agent_mode PASSED          [  9%]
+tests/test_bridge.py::test_consumer_wakes_on_propagated_fix PASSED       [ 12%]
+tests/test_bridge.py::test_read_suspends_until_fix PASSED                [ 16%]
+tests/test_examples.py::test_example[nqueens] PASSED                     [ 19%]
+tests/test_examples.py::test_example[send_more_money] PASSED             [ 22%]
+tests/test_examples.py::test_example[graph_coloring] PASSED              [ 25%]
+tests/test_examples.py::test_example[magic_square] PASSED                [ 29%]
+tests/test_examples.py::test_example[diophantine] PASSED                 [ 32%]
+tests/test_examples.py::test_example[modulo_filter] PASSED               [ 35%]
+tests/test_examples.py::test_example[simple] PASSED                      [ 38%]
+tests/test_examples.py::test_example[search] PASSED                      [ 41%]
+tests/test_examples.py::test_example[scaling] PASSED                     [ 45%]
+tests/test_examples.py::test_example[element] PASSED                     [ 48%]
+tests/test_examples.py::test_example[cardinality] PASSED                 [ 51%]
+tests/test_examples.py::test_example[boolean_logic] PASSED               [ 54%]
+tests/test_examples.py::test_example[cyclic] PASSED                      [ 58%]
+tests/test_examples.py::test_example[producer_consumer] PASSED           [ 61%]
+tests/test_examples.py::test_example[agent_counter] PASSED               [ 64%]
+tests/test_examples.py::test_example[agent_counter_random] PASSED        [ 67%]
+tests/test_integration.py::test_producer_propagator_consumer PASSED      [ 70%]
+tests/test_integration.py::test_undo_clears_mirror PASSED                [ 74%]
+tests/test_solve_all.py::test_solve_all_returns_all_pairs PASSED         [ 77%]
+tests/test_solve_all.py::test_solve_all_limit PASSED                     [ 80%]
+tests/test_store.py::test_send_more_money_through_ffi PASSED             [ 83%]
+tests/test_store.py::test_unknown_kind_raises PASSED                     [ 87%]
+tests/test_store.py::test_conflict_is_pyccp_exception PASSED             [ 90%]
+tests/test_store.py::test_out_of_bounds_cell_raises_value_error PASSED   [ 93%]
+tests/test_store.py::test_element_out_of_range_idx_raises_conflict PASSED [ 96%]
+tests/test_store.py::test_modulo_zero_divisor_raises_value_error PASSED  [100%]
+
+============================== 31 passed in 0.34s ==============================
