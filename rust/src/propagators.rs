@@ -62,12 +62,42 @@ impl LinearEq {
     pub fn new(terms: Vec<(usize, i64)>, rhs: i64) -> LinearEq {
         LinearEq { cells: terms.iter().map(|t| t.0).collect(), terms, rhs }
     }
+
+    /// Compute min/max possible sum across all variables in the constraint.
+    /// For each term (var, coeff):
+    ///   - If coeff > 0: use bounds.min for min_sum, bounds.max for max_sum
+    ///   - If coeff < 0: use bounds.max for min_sum, bounds.min for max_sum (reversed)
+    fn compute_bounds(&self, store: &Store) -> (i64, i64) {
+        let mut min_sum = 0i64;
+        let mut max_sum = 0i64;
+        
+        for (var, coeff) in &self.terms {
+            let bounds = store.bounds(*var);
+            if *coeff > 0 {
+                min_sum += coeff * bounds.min;
+                max_sum += coeff * bounds.max;
+            } else if *coeff < 0 {
+                // For negative coefficients, the relationship is reversed
+                min_sum += coeff * bounds.max;
+                max_sum += coeff * bounds.min;
+            }
+            // If coeff == 0, contributes 0 to both sums
+        }
+        
+        (min_sum, max_sum)
+    }
 }
+
 impl Propagator for LinearEq {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: propagates only when all-but-one term is fixed; full
-        // interval arithmetic when bounds-based pruning is needed.
+        // First: bounds-based early conflict detection
+        let (min_sum, max_sum) = self.compute_bounds(store);
+        if min_sum > self.rhs || max_sum < self.rhs {
+            return Err(Conflict);
+        }
+
+        // Original propagation: when all-but-one term is fixed
         let open: Vec<(usize, i64)> = self.terms.iter()
             .filter(|(c, _)| !store.is_fixed(*c)).copied().collect();
         if open.len() > 1 { return Ok(()); }
