@@ -167,7 +167,7 @@ One failing check per unit; no fixtures, no frameworks beyond pytest and cargo t
 1. Golden problems solve correctly through the Rust core.
 2. Producer/consumer bridge test passes (incremental propagation visible to agents).
 3. Conflicts raise `pyccp.Conflict`, not panics.
-4. Parallel search measurably beats sequential DFS on 12-Queens.
+4. Parallel search measurably beats sequential DFS on 14-Queens (first branch unsatisfiable).
 
 ## 8. Deferred (v2)
 
