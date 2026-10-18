@@ -41,18 +41,76 @@ impl Propagator for NeqLinear {
 pub struct AllDiff { cells: Vec<usize> }
 impl AllDiff {
     pub fn new(cells: Vec<usize>) -> AllDiff { AllDiff { cells } }
+
+    /// AC-3 algorithm for AllDiff constraint.
+    /// 
+    /// Phase 1: Remove values from fixed variables
+    /// - For each fixed variable with value v, remove v from all other variables
+    /// 
+    /// Phase 2: Check support and fix unique supporters
+    /// - For each value v in the union of all domains:
+    ///   - Count unfixed variables that have v in their domain
+    ///   - If count == 0 and a fixed variable has v: conflict
+    ///   - If count == 1: fix that variable to v
+    fn collect_all_values(&self, store: &Store) -> Vec<i64> {
+        let mut values = std::collections::HashSet::new();
+        for &var in &self.cells {
+            for &val in store.domain(var).iter() {
+                values.insert(val);
+            }
+        }
+        let mut sorted: Vec<i64> = values.into_iter().collect();
+        sorted.sort();
+        sorted
+    }
 }
 impl Propagator for AllDiff {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        for &i in &self.cells {
-            if store.is_fixed(i) {
-                let v = store.value(i);
-                for &j in &self.cells {
-                    if j != i && store.domain(j).contains(v) { store.remove(j, v)?; }
+        // Phase 1: Remove fixed values from domains
+        for &var_i in &self.cells {
+            if store.is_fixed(var_i) {
+                let value = store.value(var_i);
+                for &var_j in &self.cells {
+                    if var_i != var_j {
+                        store.remove(var_j, value)?;
+                    }
                 }
             }
         }
+        
+        // Phase 2: Check for unsupported values and fix unique supporters
+        for value in self.collect_all_values(store) {
+            // Count supporters: both fixed variables assigned v and unfixed variables with v
+            let supporters: Vec<usize> = self.cells.iter()
+                .filter(|&&var| {
+                    if store.is_fixed(var) {
+                        store.value(var) == value
+                    } else {
+                        store.domain(var).contains(value)
+                    }
+                })
+                .copied()
+                .collect();
+            
+            match supporters.len() {
+                0 => {
+                    // Value v has no support (not used by any variable)
+                    // This is not a conflict - it just means v won't be assigned
+                }
+                1 => {
+                    // Value v can only go to one variable; fix it if not already fixed
+                    let var = supporters[0];
+                    if !store.is_fixed(var) {
+                        store.commit(var, value)?;
+                    }
+                }
+                _ => {
+                    // Multiple supporters; ok (no more pruning needed here)
+                }
+            }
+        }
+        
         Ok(())
     }
 }
