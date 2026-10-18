@@ -138,8 +138,38 @@ impl LessThan { pub fn new(i: usize, j: usize) -> LessThan { LessThan { cells: [
 impl Propagator for LessThan {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: prunes only when one side is fixed; bounds reasoning later.
         let [i, j] = self.cells;
+        
+        // Get bounds for left (i) and right (j)
+        let left_bounds = store.bounds(i);
+        let right_bounds = store.bounds(j);
+        
+        // Early conflict check: if left.min >= right.max, constraint is unsatisfiable
+        if left_bounds.min >= right_bounds.max {
+            return Err(Conflict);
+        }
+        
+        // Tighten left variable: i < j means i <= j.max - 1
+        let new_left_max = right_bounds.max - 1;
+        if new_left_max < left_bounds.max {
+            store.tighten_bounds(i, crate::store::Bounds::new(left_bounds.min, new_left_max))?;
+            // Prune domain values outside tightened bounds
+            for v in store.domain(i).to_vec() {
+                if v > new_left_max { store.remove(i, v)?; }
+            }
+        }
+        
+        // Tighten right variable: i < j means j >= i.min + 1
+        let new_right_min = left_bounds.min + 1;
+        if new_right_min > right_bounds.min {
+            store.tighten_bounds(j, crate::store::Bounds::new(new_right_min, right_bounds.max))?;
+            // Prune domain values outside tightened bounds
+            for v in store.domain(j).to_vec() {
+                if v < new_right_min { store.remove(j, v)?; }
+            }
+        }
+        
+        // Domain-based pruning for fixed values (keep existing behavior for compatibility)
         if store.is_fixed(i) && store.is_fixed(j) {
             return if store.value(i) < store.value(j) { Ok(()) } else { Err(Conflict) };
         }
