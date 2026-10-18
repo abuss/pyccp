@@ -1,5 +1,7 @@
 use crate::propagators::{AllDiff, LinearEq, NeqLinear, NonZero, Propagator, Registry};
 use crate::store::{Conflict, Store};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Clone, Debug)]
 pub enum Constraint {
@@ -29,6 +31,7 @@ pub struct CustomSolver {
     constraints: Vec<Constraint>,
     store: Store,
     registry: Registry,
+    cancel: Arc<AtomicBool>,
 }
 
 impl CustomSolver {
@@ -38,6 +41,7 @@ impl CustomSolver {
             constraints: Vec::new(),
             store: Store::new(domains),
             registry: Registry::new(),
+            cancel: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -71,6 +75,7 @@ impl Solver for CustomSolver {
 
 impl CustomSolver {
     fn dfs(&mut self) -> Option<Vec<i64>> {
+        if self.cancel.load(Ordering::Relaxed) { return None; }
         let cell = match self.store.first_open() {
             Some(c) => c,
             None => return Some(self.store.assignment()),
@@ -104,27 +109,29 @@ impl CustomSolver {
         self.store.undo_to(m);
 
         // remaining splits on rayon workers, first solution wins
-        let result: std::sync::Arc<std::sync::Mutex<Option<Vec<i64>>>> =
-            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let flag = self.cancel.clone();
+        let result: Arc<Mutex<Option<Vec<i64>>>> = Arc::new(Mutex::new(None));
         let constraints = self.constraints.clone();
         let domains = self.domains.clone();
         rayon::scope(|scope| {
             for &v in &rest {
-                let (c, d, r) = (cell, domains.clone(), result.clone());
+                let (c, d, r, f) = (cell, domains.clone(), result.clone(), flag.clone());
                 let cons = constraints.clone();
                 scope.spawn(move |_| {
-                    if r.lock().unwrap().is_some() { return; }
+                    if f.load(Ordering::Relaxed) { return; }
                     let mut sub = CustomSolver::new(&d);
+                    sub.cancel = f;
                     for k in cons { sub.post(k).unwrap(); }
                     if sub.store.commit(c, v).is_ok() && sub.registry.fixpoint(&mut sub.store).is_ok() {
                         if let Some(sol) = sub.dfs() {
                             *r.lock().unwrap() = Some(sol);
+                            sub.cancel.store(true, Ordering::Relaxed);
                         }
                     }
                 });
             }
         });
-        std::sync::Arc::try_unwrap(result).ok().map(|m| m.into_inner().unwrap()).flatten()
+        Arc::try_unwrap(result).ok().and_then(|m| m.into_inner().ok()).flatten()
     }
 }
 
@@ -194,5 +201,44 @@ mod tests {
                 assert_ne!(sol[row] + row as i64, sol[col] + col as i64);
             }
         }
+    }
+
+    #[test]
+    fn parallel_beats_sequential_14_queens() {
+        // 14-Queens plus a sum constraint satisfiable only with row0 >= 4, so the
+        // first split value (row0 = 0) is an unsatisfiable subtree that sequential
+        // DFS must exhaust before reaching a solution, while rayon workers cover
+        // the remaining splits concurrently.
+        let domains: Vec<Vec<i64>> = (0..14).map(|_| (0..14).collect()).collect();
+        let build = || {
+            let mut s = CustomSolver::new(&domains);
+            for i in 0..14 {
+                for j in (i + 1)..14 {
+                    s.post(Constraint::NeqLinear(vec![(i, 1), (j, -1)], 0)).unwrap();
+                    s.post(Constraint::NeqLinear(vec![(i, 1), (j, -1)], i as i64 - j as i64)).unwrap();
+                    s.post(Constraint::NeqLinear(vec![(i, 1), (j, -1)], j as i64 - i as i64)).unwrap();
+                }
+            }
+            s.post(Constraint::LinearEq(vec![(0, 1), (1, 1), (2, 1), (3, 1), (4, 1)], 50)).unwrap();
+            s
+        };
+        let valid = |sol: &Vec<i64>| {
+            for row in 0..14 {
+                for col in (row + 1)..14 {
+                    if sol[row] == sol[col]
+                        || sol[row] - row as i64 == sol[col] - col as i64
+                        || sol[row] + row as i64 == sol[col] + col as i64 { return false; }
+                }
+            }
+            true
+        };
+        let t0 = std::time::Instant::now();
+        let seq = build().solve().unwrap();
+        let sd = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let par = build().solve_parallel().unwrap();
+        let pd = t1.elapsed();
+        assert!(valid(&seq) && valid(&par));
+        assert!(pd < sd, "parallel {pd:?} >= sequential {sd:?}");
     }
 }
