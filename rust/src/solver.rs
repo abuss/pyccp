@@ -24,6 +24,9 @@ pub trait Solver {
     fn post(&mut self, c: Constraint) -> Result<(), Conflict>;
     fn entails(&self, c: &Constraint) -> bool;
     fn solve(&mut self) -> Option<Vec<i64>>;
+    fn commit(&mut self, cell: usize, value: i64) -> Result<(), Conflict>;
+    fn is_fixed(&self, cell: usize) -> bool;
+    fn value(&self, cell: usize) -> i64;
 }
 
 pub struct CustomSolver {
@@ -71,6 +74,15 @@ impl Solver for CustomSolver {
     fn solve(&mut self) -> Option<Vec<i64>> {
         self.dfs()
     }
+
+    fn commit(&mut self, cell: usize, value: i64) -> Result<(), Conflict> {
+        self.store.commit(cell, value)?;
+        self.registry.fixpoint(&mut self.store)?;
+        Ok(())
+    }
+
+    fn is_fixed(&self, cell: usize) -> bool { self.store.is_fixed(cell) }
+    fn value(&self, cell: usize) -> i64 { self.store.value(cell) }
 }
 
 impl CustomSolver {
