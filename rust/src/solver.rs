@@ -88,6 +88,44 @@ impl CustomSolver {
         }
         None
     }
+
+    pub fn solve_parallel(&mut self) -> Option<Vec<i64>> {
+        let cell = self.store.first_open()?;
+        let domain: Vec<i64> = self.store.domain(cell).to_vec();
+        let (first, rest) = (domain[0], domain[1..].to_vec());
+
+        // main branch on the calling thread
+        let m = self.store.mark();
+        if self.store.commit(cell, first).is_ok() {
+            if self.registry.fixpoint(&mut self.store).is_ok() {
+                if let Some(sol) = self.dfs() { return Some(sol); }
+            }
+        }
+        self.store.undo_to(m);
+
+        // remaining splits on rayon workers, first solution wins
+        let result: std::sync::Arc<std::sync::Mutex<Option<Vec<i64>>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let constraints = self.constraints.clone();
+        let domains = self.domains.clone();
+        rayon::scope(|scope| {
+            for &v in &rest {
+                let (c, d, r) = (cell, domains.clone(), result.clone());
+                let cons = constraints.clone();
+                scope.spawn(move |_| {
+                    if r.lock().unwrap().is_some() { return; }
+                    let mut sub = CustomSolver::new(&d);
+                    for k in cons { sub.post(k).unwrap(); }
+                    if sub.store.commit(c, v).is_ok() && sub.registry.fixpoint(&mut sub.store).is_ok() {
+                        if let Some(sol) = sub.dfs() {
+                            *r.lock().unwrap() = Some(sol);
+                        }
+                    }
+                });
+            }
+        });
+        std::sync::Arc::try_unwrap(result).ok().map(|m| m.into_inner().unwrap()).flatten()
+    }
 }
 
 #[cfg(test)]
@@ -134,5 +172,27 @@ mod tests {
             0,
         )).unwrap();
         assert_eq!(s.solve().unwrap(), vec![9, 5, 6, 7, 1, 0, 8, 2]);
+    }
+
+    #[test]
+    fn parallel_twelve_queens_is_valid() {
+        let domains: Vec<Vec<i64>> = (0..12).map(|_| (0..12).collect()).collect();
+        let mut s = CustomSolver::new(&domains);
+        for i in 0..12 {
+            for j in (i + 1)..12 {
+                s.post(Constraint::NeqLinear(vec![(i, 1), (j, -1)], 0)).unwrap();
+                s.post(Constraint::NeqLinear(vec![(i, 1), (j, -1)], i as i64 - j as i64)).unwrap();
+                s.post(Constraint::NeqLinear(vec![(i, 1), (j, -1)], j as i64 - i as i64)).unwrap();
+            }
+        }
+        let sol = s.solve_parallel().unwrap();
+        assert_eq!(sol.len(), 12);
+        for row in 0..12 {
+            for col in (row + 1)..12 {
+                assert_ne!(sol[row], sol[col]);
+                assert_ne!(sol[row] - row as i64, sol[col] - col as i64);
+                assert_ne!(sol[row] + row as i64, sol[col] + col as i64);
+            }
+        }
     }
 }
