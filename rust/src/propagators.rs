@@ -279,6 +279,13 @@ impl Registry {
     pub fn new() -> Registry { Registry { props: Vec::new() } }
     pub fn add(&mut self, p: Box<dyn Propagator>) { self.props.push(p); }
 
+    pub fn propagators_involving(&self, cell: usize) -> Vec<usize> {
+        self.props.iter().enumerate()
+            .filter(|(_, p)| p.cells().contains(&cell))
+            .map(|(i, _)| i)
+            .collect()
+    }
+
     pub fn fixpoint(&mut self, store: &mut Store) -> Result<(), Conflict> {
         loop {
             let before = store.trail_len();

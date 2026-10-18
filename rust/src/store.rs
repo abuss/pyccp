@@ -194,6 +194,10 @@ impl Store {
     pub fn assignment(&self) -> std::vec::Vec<i64> {
         self.cells.iter().map(|d| d.min().unwrap()).collect()
     }
+
+    pub fn cells_unfixed(&self) -> usize {
+        self.cells.iter().filter(|d| d.len() > 1).count()
+    }
 }
 
 #[cfg(test)]
