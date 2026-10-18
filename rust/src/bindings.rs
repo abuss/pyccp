@@ -34,6 +34,32 @@ fn parse_constraint(c: &Bound<'_, PyAny>, n: usize) -> PyResult<Constraint> {
             let rhs = args.get_item(1)?.extract()?;
             Ok(Constraint::LinearEq(terms, rhs))
         }
+        "lt" => Ok(Constraint::LessThan(check(args.get_item(0)?.extract()?)?, check(args.get_item(1)?.extract()?)?)),
+        "mul" => Ok(Constraint::Multiply(
+            check(args.get_item(0)?.extract()?)?, check(args.get_item(1)?.extract()?)?, args.get_item(2)?.extract()?)),
+        "element" => {
+            let array: Vec<usize> = args.get_item(0)?.extract()?;
+            for &i in &array { check(i)?; }
+            Ok(Constraint::Element(array, check(args.get_item(1)?.extract()?)?, check(args.get_item(2)?.extract()?)?))
+        }
+        "cardinality" => {
+            let cells: Vec<usize> = args.get_item(0)?.extract()?;
+            for &i in &cells { check(i)?; }
+            Ok(Constraint::Cardinality(cells, args.get_item(1)?.extract()?, args.get_item(2)?.extract()?))
+        }
+        "modulo" => Ok(Constraint::Modulo(
+            check(args.get_item(0)?.extract()?)?, args.get_item(1)?.extract()?, args.get_item(2)?.extract()?)),
+        "and" | "or" | "xor" => {
+            let kind = kind.clone();
+            let x = check(args.get_item(0)?.extract()?)?;
+            let y = check(args.get_item(1)?.extract()?)?;
+            let z = check(args.get_item(2)?.extract()?)?;
+            Ok(match kind.as_str() {
+                "and" => Constraint::And(x, y, z),
+                "or"  => Constraint::Or(x, y, z),
+                _     => Constraint::Xor(x, y, z),
+            })
+        }
         other => Err(PyValueError::new_err(format!("unknown kind: {other}"))),
     }
 }

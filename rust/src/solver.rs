@@ -1,4 +1,4 @@
-use crate::propagators::{AllDiff, LinearEq, NeqLinear, NonZero, Propagator, Registry};
+use crate::propagators::{AllDiff, And, Cardinality, Element, LinearEq, LessThan, Modulo, Multiply, NeqLinear, NonZero, Or, Propagator, Registry, Xor};
 use crate::store::{Conflict, Store};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -9,6 +9,14 @@ pub enum Constraint {
     AllDiff(Vec<usize>),
     LinearEq(Vec<(usize, i64)>, i64),
     NonZero(usize),
+    LessThan(usize, usize),
+    Multiply(usize, usize, i64),
+    Element(Vec<usize>, usize, usize),
+    Cardinality(Vec<usize>, i64, usize),
+    Modulo(usize, i64, i64),
+    And(usize, usize, usize),
+    Or(usize, usize, usize),
+    Xor(usize, usize, usize),
 }
 
 fn to_propagator(c: &Constraint) -> Box<dyn Propagator> {
@@ -17,6 +25,14 @@ fn to_propagator(c: &Constraint) -> Box<dyn Propagator> {
         Constraint::AllDiff(v) => Box::new(AllDiff::new(v.clone())),
         Constraint::LinearEq(t, r) => Box::new(LinearEq::new(t.clone(), *r)),
         Constraint::NonZero(i) => Box::new(NonZero::new(*i)),
+        Constraint::LessThan(i, j) => Box::new(LessThan::new(*i, *j)),
+        Constraint::Multiply(i, j, k) => Box::new(Multiply::new(*i, *j, *k)),
+        Constraint::Element(a, i, y) => Box::new(Element::new(a.clone(), *i, *y)),
+        Constraint::Cardinality(c, v, n) => Box::new(Cardinality::new(c.clone(), *v, *n)),
+        Constraint::Modulo(c, m, k) => Box::new(Modulo::new(*c, *m, *k)),
+        Constraint::And(x, y, z) => Box::new(And::new(*x, *y, *z)),
+        Constraint::Or(x, y, z) => Box::new(Or::new(*x, *y, *z)),
+        Constraint::Xor(x, y, z) => Box::new(Xor::new(*x, *y, *z)),
     }
 }
 
@@ -61,11 +77,7 @@ impl Solver for CustomSolver {
     fn entails(&self, c: &Constraint) -> bool {
         // ponytail: entailment = all involved cells fixed and constraint holds;
         // add real entailment (bounds reasoning) when needed.
-        let involved: Vec<usize> = match c {
-            Constraint::NeqLinear(t, _) | Constraint::LinearEq(t, _) => t.iter().map(|x| x.0).collect(),
-            Constraint::AllDiff(v) => v.clone(),
-            Constraint::NonZero(i) => vec![*i],
-        };
+        let involved: Vec<usize> = to_propagator(c).cells().to_vec();
         if !involved.iter().all(|&c| self.store.is_fixed(c)) { return false; }
         let mut scratch = Store::new(&self.domains);
         for &c in &involved { scratch.commit(c, self.store.value(c)).unwrap(); }
