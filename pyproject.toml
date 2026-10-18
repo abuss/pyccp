@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "pyccp"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.maturin]
+module-name = "pyccp_core"
+manifest-path = "rust/Cargo.toml"
+features = ["pyo3/extension-module"]
