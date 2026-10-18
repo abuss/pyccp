@@ -963,7 +963,9 @@ def run():
         async def agent(i):
             v = await ports[i].read()
             seen.append(i)
-            await ports[(i + 1) % n].commit(v + 1)
+            target = ports[(i + 1) % n]
+            if not target.is_fixed():
+                await target.commit(v + 1)
 
         d = asyncio.create_task(pyccp.dispatcher(s))
         await ports[0].commit(0)
@@ -996,7 +998,9 @@ def run():
         async def agent(i):
             v = await ports[i].read()
             seen.append(i)
-            await ports[random.randrange(n)].commit(v + 1)
+            target = ports[random.randrange(n)]
+            if not target.is_fixed():
+                await target.commit(v + 1)
 
         d = asyncio.create_task(pyccp.dispatcher(s))
         await ports[0].commit(0)
