@@ -122,12 +122,10 @@ pub trait Solver {
 
 - Within a branch, the store is monotone: facts accumulate, results are
   scheduling-independent (CCP determinism).
-- In v1, agents observe **only the main branch**. An agent that reads a solver variable
-  during `solve()` is bound to the main branch; if the main branch backtracks past a fact
-  the agent observed, the agent task is cancelled and its side effects are lost
-  (Oz-faithful semantics).
 - In v1, `solve()` is synchronous, so the dispatcher cannot run during it: agents observe
-  the post-solve final state, not the main branch incrementally.
+  the post-solve final state, not the main branch incrementally. Oz-faithful cancellation of
+  an agent bound to an undone branch is deferred to v2 — it is unreachable in v1 because a
+  fact is drained before any undo.
 - Parallel workers never notify: their branches are solver-private.
 - `ponytail:` single-branch observation, no cross-branch entailment; add multi-branch
   observation when actually needed.
