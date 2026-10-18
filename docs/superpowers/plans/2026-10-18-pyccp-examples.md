@@ -979,6 +979,7 @@ import pyccp
 
 def run():
     async def main():
+        random.seed(7)
         n = 4
         s = pyccp.Store([list(range(n + 1))] * n)
         ports = [s.var(f"p{i}", i) for i in range(n)]
@@ -993,14 +994,14 @@ def run():
         await ports[0].commit(0)
         await pyccp.join(*[lambda i=i: agent(i) for i in range(n)])
         d.cancel()
-        assert len(seen) == n          # every agent ran exactly once
+        assert seen == [0, 2, 1, 3]
         print("agent_counter_random:", seen)
         return seen
 
     return asyncio.run(main())
 ```
 
-Note: a random ring can deadlock if an agent forwards to a port whose agent already finished. Seed the RNG (`random.seed(1)`) so the example is deterministic, and assert the ring completed.
+A random ring can deadlock (an agent forwards to a port whose agent already ran) or conflict (re-committing a fixed port). Seed with `random.seed(7)`, verified to produce the full walk `0 → 2 → 1 → 3`; assert that exact walk. If the seed is changed, re-verify the walk covers all four agents.
 
 - [ ] **Step 4: Run tests, verify they pass**
 
