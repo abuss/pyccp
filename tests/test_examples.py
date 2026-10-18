@@ -4,6 +4,8 @@ import pytest
 EXAMPLES = [
     "nqueens", "send_more_money", "graph_coloring", "magic_square",
     "diophantine", "modulo_filter",
+    "simple", "search", "scaling", "element", "cardinality",
+    "boolean_logic", "cyclic",
 ]
 
 @pytest.mark.parametrize("name", EXAMPLES)
