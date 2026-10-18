@@ -7,21 +7,30 @@ use crate::store::Conflict;
 
 create_exception!(pyccp_core, ConflictError, PyException);
 
-fn to_pyerr(c: Conflict) -> PyErr { ConflictError::new_err("constraint conflict") }
+fn to_pyerr(_: Conflict) -> PyErr { ConflictError::new_err("constraint conflict") }
 
-fn parse_constraint(py: Python, c: &Bound<'_, PyAny>) -> PyResult<Constraint> {
+fn parse_constraint(c: &Bound<'_, PyAny>, n: usize) -> PyResult<Constraint> {
+    let check = |i: usize| -> PyResult<usize> {
+        if i >= n { return Err(PyValueError::new_err(format!("cell {i} out of bounds"))); }
+        Ok(i)
+    };
     let kind: String = c.get_item(0)?.extract()?;
     let args = c.get_item(1)?;
     match kind.as_str() {
         "neq" => {
-            let i: usize = args.get_item(0)?.extract()?;
-            let j: usize = args.get_item(1)?.extract()?;
+            let i = check(args.get_item(0)?.extract()?)?;
+            let j = check(args.get_item(1)?.extract()?)?;
             Ok(Constraint::NeqLinear(vec![(i, 1), (j, -1)], 0))
         }
-        "all_diff" => Ok(Constraint::AllDiff(args.get_item(0)?.extract()?)),
-        "nonzero" => Ok(Constraint::NonZero(args.get_item(0)?.extract()?)),
+        "all_diff" => {
+            let cells: Vec<usize> = args.get_item(0)?.extract()?;
+            for &i in &cells { check(i)?; }
+            Ok(Constraint::AllDiff(cells))
+        }
+        "nonzero" => Ok(Constraint::NonZero(check(args.get_item(0)?.extract()?)?)),
         "linear_eq" => {
             let terms: Vec<(usize, i64)> = args.get_item(0)?.extract()?;
+            for &(i, _) in &terms { check(i)?; }
             let rhs = args.get_item(1)?.extract()?;
             Ok(Constraint::LinearEq(terms, rhs))
         }
@@ -51,13 +60,16 @@ impl PyStore {
     }
 
     fn post(&mut self, py: Python, c: &Bound<'_, PyAny>) -> PyResult<()> {
-        let c = parse_constraint(py, c)?;
+        let c = parse_constraint(c, self.fixed_before.len())?;
         self.solver.post(c).map_err(to_pyerr)?;
         self.notify_newly_fixed(py)?;
         Ok(())
     }
 
     fn commit(&mut self, py: Python, cell: usize, value: i64) -> PyResult<()> {
+        if cell >= self.fixed_before.len() {
+            return Err(PyValueError::new_err(format!("cell {cell} out of bounds")));
+        }
         self.solver.commit(cell, value).map_err(to_pyerr)?;
         self.notify_newly_fixed(py)?;
         Ok(())

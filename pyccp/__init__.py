@@ -1,3 +1,5 @@
+"""v1 agents observe the post-solve final state, not the main branch
+incrementally: the dispatcher cannot run during a synchronous solve()."""
 import asyncio
 from queue import SimpleQueue
 import pyccp_core

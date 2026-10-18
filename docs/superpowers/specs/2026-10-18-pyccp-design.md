@@ -126,6 +126,8 @@ pub trait Solver {
   during `solve()` is bound to the main branch; if the main branch backtracks past a fact
   the agent observed, the agent task is cancelled and its side effects are lost
   (Oz-faithful semantics).
+- In v1, `solve()` is synchronous, so the dispatcher cannot run during it: agents observe
+  the post-solve final state, not the main branch incrementally.
 - Parallel workers never notify: their branches are solver-private.
 - `ponytail:` single-branch observation, no cross-branch entailment; add multi-branch
   observation when actually needed.
@@ -155,8 +157,8 @@ agent: var.commit(42)
 - **Python (`pytest`):** suspension/wake semantics, conflict detection, dispatcher bridge.
 - **One FFI integration test:** producer agent commits, propagator prunes in Rust, consumer
   agent wakes through the bridge.
-- **Parallel check:** 12-Queens solved by the rayon path must match the sequential solution
-  set for the first solution.
+- **Parallel check:** the benchmark runs on 14-Queens with an unsatisfiable first subtree
+  (not 12-Queens); the rayon path must produce a valid solution faster than sequential DFS.
 
 One failing check per unit; no fixtures, no frameworks beyond pytest and cargo test.
 

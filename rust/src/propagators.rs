@@ -27,6 +27,7 @@ impl Propagator for NeqLinear {
         }
         if open.len() == 1 {
             let (c, coef) = open[0];
+            if coef == 0 { return Err(Conflict); }
             let rem = self.k - sum;
             if rem % coef == 0 {
                 let v = rem / coef;
@@ -76,6 +77,7 @@ impl Propagator for LinearEq {
         }
         if open.len() == 1 {
             let (c, k) = open[0];
+            if k == 0 { return Err(Conflict); }
             if sum % k != 0 { return Err(Conflict); }
             let v = sum / k;
             for cur in store.domain(c).to_vec() {
@@ -167,6 +169,22 @@ mod tests {
         s.commit(0, 1).unwrap();
         r.fixpoint(&mut s).unwrap();
         assert_eq!(s.domain(1), &[2]);
+    }
+
+    #[test]
+    fn neq_linear_zero_coef_is_conflict() {
+        let mut s = Store::new(&[vec![1, 2]]);
+        let mut r = Registry::new();
+        r.add(Box::new(NeqLinear::new(vec![(0, 0)], 1)));
+        assert_eq!(r.fixpoint(&mut s), Err(Conflict));
+    }
+
+    #[test]
+    fn linear_eq_zero_coef_is_conflict() {
+        let mut s = Store::new(&[vec![1, 2]]);
+        let mut r = Registry::new();
+        r.add(Box::new(LinearEq::new(vec![(0, 0)], 1)));
+        assert_eq!(r.fixpoint(&mut s), Err(Conflict));
     }
 
     #[test]

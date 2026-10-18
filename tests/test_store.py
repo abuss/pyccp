@@ -21,3 +21,10 @@ def test_conflict_is_pyccp_exception():
     s = pyccp.Store([[1], [1]])
     with pytest.raises(pyccp.Conflict):
         s.post(("neq", (0, 1)))
+
+def test_out_of_bounds_cell_raises_value_error():
+    s = pyccp.Store([[1], [1]])
+    with pytest.raises(ValueError):
+        s._core.commit(99, 1)
+    with pytest.raises(ValueError):
+        s.post(("neq", (0, 99)))

@@ -136,7 +136,8 @@ impl CustomSolver {
                     for k in cons { sub.post(k).unwrap(); }
                     if sub.store.commit(c, v).is_ok() && sub.registry.fixpoint(&mut sub.store).is_ok() {
                         if let Some(sol) = sub.dfs() {
-                            *r.lock().unwrap() = Some(sol);
+                            let mut slot = r.lock().unwrap();
+                            if slot.is_none() { *slot = Some(sol); }
                             sub.cancel.store(true, Ordering::Relaxed);
                         }
                     }
