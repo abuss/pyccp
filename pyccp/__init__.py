@@ -65,3 +65,17 @@ class Store:
         while not self._queue.empty():
             cell, value = self._queue.get()
             self._apply(cell, value)
+
+
+async def join(*agents):
+    return await asyncio.gather(*[a() for a in agents])
+
+async def choice(*agents):
+    tasks = [asyncio.ensure_future(a()) for a in agents]
+    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    for t in pending:
+        t.cancel()
+    return done.pop().result()
+
+async def at(var: Var) -> int:
+    return await var.read()
