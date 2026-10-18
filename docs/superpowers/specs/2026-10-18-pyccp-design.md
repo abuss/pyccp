@@ -81,8 +81,10 @@ pub trait Propagator: Send + Sync {
 
 - The store keeps a registry mapping cell → propagators. When a cell changes, its
   propagators run until fixpoint.
-- Built-in propagators for v1: `Neq(i, j)`, `AllDiff(indices)`, `LinearEq(terms, rhs)`,
-  `NonZero(i)`. N-Queens diagonals are expressed as `LinearEq` — no dedicated diagonal kind.
+- Built-in propagators for v1: `NeqLinear(terms, k)` (sum(coef·v) != k), `AllDiff(indices)`,
+  `LinearEq(terms, rhs)` (sum(coef·v) == rhs), `NonZero(i)`. N-Queens columns are
+  `NeqLinear` with `k = 0`; diagonals are `NeqLinear` with `k = i - j` and `k = j - i` —
+  no dedicated diagonal kind.
 - A propagator prunes domains; pruning to the empty set is a `Conflict`.
 
 ### 3.4 Solver trait (pluggability boundary)
