@@ -83,6 +83,8 @@ pub struct Conflict;
 pub struct Store {
     cells: std::vec::Vec<Domain>,
     trail: std::vec::Vec<(usize, i64)>,
+    mrv_cache: Option<usize>,
+    mrv_cache_valid: bool,
 }
 
 impl Store {
@@ -90,6 +92,8 @@ impl Store {
         Store {
             cells: domains.iter().map(|d| Domain::new(d.clone())).collect(),
             trail: std::vec::Vec::new(),
+            mrv_cache: None,
+            mrv_cache_valid: false,
         }
     }
 
@@ -115,6 +119,33 @@ impl Store {
         self.trail.len()
     }
 
+    pub fn invalidate_mrv_cache(&mut self) {
+        self.mrv_cache_valid = false;
+    }
+
+    pub fn mrv(&mut self) -> Option<usize> {
+        if self.mrv_cache_valid {
+            return self.mrv_cache;
+        }
+        
+        let mut best_cell = None;
+        let mut best_size = usize::MAX;
+        
+        for (cell, domain) in self.cells.iter().enumerate() {
+            if !self.is_fixed(cell) {
+                let size = domain.len();
+                if size < best_size {
+                    best_size = size;
+                    best_cell = Some(cell);
+                }
+            }
+        }
+        
+        self.mrv_cache = best_cell;
+        self.mrv_cache_valid = true;
+        best_cell
+    }
+
     pub fn trail_len(&self) -> usize {
         self.trail.len()
     }
@@ -123,6 +154,7 @@ impl Store {
         let removed = self.cells[cell].remove(value);
         if removed {
             self.trail.push((cell, value));
+            self.invalidate_mrv_cache();
             if self.cells[cell].is_empty() {
                 return Err(Conflict);
             }
@@ -142,6 +174,7 @@ impl Store {
         for v in values_to_remove {
             self.remove(cell, v)?;
         }
+        self.invalidate_mrv_cache();
         Ok(())
     }
 
@@ -155,6 +188,7 @@ impl Store {
                 }
             }
         }
+        self.invalidate_mrv_cache();
     }
 
     pub fn assignment(&self) -> std::vec::Vec<i64> {
