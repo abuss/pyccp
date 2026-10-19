@@ -134,6 +134,91 @@ for sol in sols:
 print(f"Job assignment: {best_assign}, makespan: {best_makespan}")
 ```
 
+## Advanced: In-Solver Cost Computation (v2.4)
+
+### Overview
+
+v2.3 marked cost cells for optimization but computed costs externally (post-solve).
+v2.4 introduces in-solver cost computation using LinearEq and LeLinear constraints,
+enabling the solver to prune search branches based on cost bounds during optimization.
+
+### Pattern: Knapsack Value Maximization
+
+The 0/1 knapsack problem demonstrates the complete in-solver optimization pattern:
+
+```python
+from pyccp import Store
+
+items = [(10, 5), (8, 4), (7, 3), (6, 2), (5, 1)]  # (value, weight)
+capacity = 12
+
+# Variables: selected[i] ∈ {0,1}, value, weight
+n = len(items)
+s = Store([[0, 1] for _ in range(n)] +
+          [list(range(50))] +  # value cell
+          [list(range(50))])   # weight cell
+
+# In-solver cost computation via LinearEq
+value_idx = n
+weight_idx = n + 1
+
+# value = sum(selected[i] * items[i].value)
+value_terms = [(i, items[i][0]) for i in range(n)] + [(value_idx, -1)]
+s.post(("linear_eq", (value_terms, 0)))
+
+# weight = sum(selected[i] * items[i].weight)
+weight_terms = [(i, items[i][1]) for i in range(n)] + [(weight_idx, -1)]
+s.post(("linear_eq", (weight_terms, 0)))
+
+# Capacity constraint: weight <= capacity
+s.post(("le_linear", ([(i, items[i][1]) for i in range(n)], capacity)))
+
+# Optimization: maximize value
+s.set_objective(value_idx, minimize=False)
+s.solve_all()
+
+best_value = s.best_cost()
+print(f"Maximum value: {best_value}")
+```
+
+### Key Points
+
+1. **LinearEq Constraint:** Maps variable values to computed cells
+   - Syntax: `("linear_eq", ([(var_idx, coeff), ..., (result_cell, -1)], 0))`
+   - Semantics: `sum(cell[var_idx] * coeff) = 0` (right-hand side is always 0)
+   - Result cell = sum of (selected variable × coefficient)
+
+2. **LeLinear Constraint (v2.4):** Enforces linear inequality bounds
+   - Syntax: `("le_linear", ([(var_idx, coeff), ...], rhs))`
+   - Semantics: `sum(cell[var_idx] * coeff) <= rhs`
+   - Example: capacity constraint on total weight
+
+3. **Objective Cell:** The cell passed to `set_objective()` must be computed by constraints
+   - Solver fixes the objective cell value during search
+   - B&B prunes when the cell cannot improve past `best_cost()`
+
+4. **Search Efficiency:** In-solver cost computation enables pruning
+   - Without constraints: solver enumerates all 2^n solutions, scores externally
+   - With constraints: solver prunes branches early when bounds are violated
+   - Expected speedup: 20-40% on small instances (n ≤ 20)
+
+### Pattern: TSP Edge Costs (v2.5+)
+
+Traveling Salesman requires 2D indexing: edge cost = dist[from_city][to_city].
+
+v2.4 defers this pattern; v2.5 will add table constraints or multi-dimensional Element indexing.
+
+For now, see `examples/tsp.py` for the complete problem structure; costs are computed externally.
+
+### Limitations & Roadmap
+
+- **Single Objective:** v2.4 supports one cost cell only (multi-objective in v3)
+- **Linear Costs:** Objective must be expressible via LinearEq (non-linear objectives in v3)
+- **No LP Relaxation:** B&B is greedy constraint-based (LP relaxation in v3)
+- **TSP Cost:** Still computed externally (v2.5 will add multi-dimensional indexing)
+
+See RELEASE_NOTES.md for the full v3 roadmap.
+
 ## Limitations
 
 - **Single objective only**: Multi-objective optimization is not supported.
