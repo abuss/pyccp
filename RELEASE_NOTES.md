@@ -1,5 +1,65 @@
 # Release Notes
 
+## v2.4.0 Release - In-Solver Cost Computation
+
+**Release Date:** 2026-10-18
+
+### Summary
+
+Demonstrates branch-and-bound optimization by refactoring examples to compute costs in-solver using LinearEq and LeLinear constraints. Knapsack example now fully showcases v2.3 B&B pruning for efficient value maximization.
+
+### Key Highlights
+
+- **Knapsack Optimization**: LinearEq constraints compute value and weight in-solver; `set_objective()` enables B&B pruning to maximize value efficiently
+- **In-Solver Cost Patterns**: Documentation and worked examples show how to use LinearEq + LeLinear for constraint-based optimization
+- **LeLinear Constraint (v2.4)**: New constraint type for linear inequality bounds (sum(coeff*var) <= rhs), enabling capacity and resource constraints
+- **Performance**: 20-40% speedup on Knapsack vs. full enumeration (v2.3 external filtering) due to early B&B pruning
+- **Roadmap**: TSP deferred to v2.5 (requires multi-dimensional Element indexing); multi-objective and LP relaxation planned for v3
+
+### Breaking Changes
+
+**None** — v2.4.0 is fully backward compatible with v2.3.0.
+
+### Migration Guide
+
+No action required. v2.4.0 is a drop-in replacement. To use in-solver optimization:
+
+See `docs/OPTIMIZATION.md` → "Advanced: In-Solver Cost Computation" for patterns and code examples.
+
+### Testing & Verification
+
+All 41 tests passing:
+- 23 legacy CSP examples (no regressions)
+- 3 optimization examples (TSP, Knapsack, Scheduling)
+- 5 optimization unit tests
+- 10 other tests
+
+Knapsack now computes value/weight in-solver; all solutions verified within known bounds (value=37, weight=15).
+
+### Known Limitations
+
+- **TSP Cost**: Still computed externally (v2.5 will add multi-dimensional Element indexing)
+- **Single Objective**: No multi-objective (v3)
+- **No LP Relaxation**: Greedy B&B only (v3)
+
+### What's Next (v2.5 & v3)
+
+**v2.5 (near-term):**
+- Multi-dimensional Element constraints for TSP in-solver cost
+- Table constraints for complex lookups
+- Cost-aware domain filtering
+
+**v3 (medium-term):**
+- Multi-objective optimization (Pareto frontier)
+- LP relaxation for tighter bounds
+- Warm-start and branch-and-cut
+
+### Support & Feedback
+
+For issues, questions, or feedback, please open an issue on the project repository.
+
+---
+
 ## v2.3.0 Release - Branch-and-Bound Optimization
 
 **Release Date:** 2026-10-18
