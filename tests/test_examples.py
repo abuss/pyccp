@@ -7,7 +7,7 @@ EXAMPLES = [
     "simple", "search", "scaling", "element", "cardinality",
     "boolean_logic", "cyclic",
     "producer_consumer", "agent_counter", "agent_counter_random", "agent_counter_timed",
-    "strategy_choice",
+    "strategy_choice", "scheduling",
 ]
 
 @pytest.mark.parametrize("name", EXAMPLES)
