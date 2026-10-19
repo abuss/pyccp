@@ -6,7 +6,7 @@ EXAMPLES = [
     "diophantine", "modulo_filter",
     "simple", "search", "scaling", "element", "cardinality",
     "boolean_logic", "cyclic",
-    "producer_consumer", "agent_counter", "agent_counter_random",
+    "producer_consumer", "agent_counter", "agent_counter_random", "agent_counter_timed",
 ]
 
 @pytest.mark.parametrize("name", EXAMPLES)
