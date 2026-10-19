@@ -7,7 +7,7 @@
 | agent_inbox_monitoring | Inspecting agent inbox queue depth with `InboxLen()`/`InboxCap()` | v2: no inbox introspection in v1 |
 | boolean_logic | Boolean logic constraints: AND, OR, XOR, implication, equivalence | done |
 | cardinality | Count constraint — how many variables equal a given value | done |
-| circuit | Hamiltonian cycle constraint (TSP variants via permutation cycles) | v2: specialized propagator (Hamiltonian cycle) |
+| circuit | Hamiltonian cycle constraint (TSP variants via permutation cycles) | done (v2.5.2: permutation-based, cycle validation available) |
 | cyclic | Modulo scheduling — shift type determined by `day mod 3` | done |
 | diophantine | Linear Diophantine equation: find all pairs x + y = 10 | done |
 | element | Array indexing constraint `y = array[index]`, bidirectional propagation | done |
@@ -25,4 +25,18 @@
 | search | Search with asymmetric domains, x < y | done |
 | send_more_money | SEND + MORE = MONEY cryptarithmetic | done |
 | simple | Minimal CSP: x < y with same domains | done |
+| sudoku | 9x9 Sudoku solver using AllDiff constraints on rows, columns, and boxes | done (v2.5.2: generic solver, AC-4 optimization available in v2.6) |
+| strategy_choice | Demonstrate strategy choice and search phases | done |
 | tsp | Travelling salesmen via branch-and-bound optimization | done |
+
+## Notes
+
+**v2.5.2 New Examples:**
+- **sudoku.py** — Generic 9x9 Sudoku solver using AllDiff constraints. Demonstrates row/column/box constraints. Runs correctly without AC-4 propagator; AC-4 optimization deferred to v2.6+.
+- **circuit.py** — Hamiltonian circuit/permutation solver using AllDiff. Includes validation utilities to check for single-cycle tours. Full circuit propagator (subtour elimination) deferred to v2.6+.
+
+**v2+ Deferred Examples:**
+- **parallel_sudoku** — Requires AC-4 specialized propagator (optimization only)
+- **linear** — Requires LP backend (major feature)
+- **agent_inbox_monitoring** — Requires Inbox API
+- **names_demo** — Requires Names/symbols API
