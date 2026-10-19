@@ -5,14 +5,15 @@ use pyccp_core::store::{Store, Conflict};
 /// allDiff([x, y, z]), x=1 should remove 1 from y and z domains
 #[test]
 fn test_ac3_removes_fixed_from_others() {
+    // Use large domains to force SimpleIntersection algorithm (need average > 500)
     let mut s = Store::new(&[
         vec![1],
-        vec![1, 2, 3],
-        vec![1, 2, 3],
+        (1..=1001).collect::<Vec<i64>>(),
+        (1..=1001).collect::<Vec<i64>>(),
     ]);
     
     let mut r = Registry::new();
-    r.add(Box::new(AllDiff::new(vec![0, 1, 2])));
+    r.add(Box::new(AllDiff::new(vec![0, 1, 2], &s)));
     
     // Run propagation to fixpoint
     r.fixpoint(&mut s).unwrap();
@@ -38,14 +39,15 @@ fn test_ac3_removes_fixed_from_others() {
 /// - After y=2: value 3 only in z => z must be 3
 #[test]
 fn test_ac3_fixes_unique_supporters() {
+    // Use large domains to force SimpleIntersection algorithm
     let mut s = Store::new(&[
-        vec![1, 2],
-        vec![2, 3],
-        vec![3, 4],
+        (1..=501).collect::<Vec<i64>>(),
+        (2..=502).collect::<Vec<i64>>(),
+        (3..=503).collect::<Vec<i64>>(),
     ]);
     
     let mut r = Registry::new();
-    r.add(Box::new(AllDiff::new(vec![0, 1, 2])));
+    r.add(Box::new(AllDiff::new(vec![0, 1, 2], &s)));
     
     // Run propagation to fixpoint
     r.fixpoint(&mut s).unwrap();
@@ -72,7 +74,7 @@ fn test_ac3_conflict_no_support() {
     ]);
     
     let mut r = Registry::new();
-    r.add(Box::new(AllDiff::new(vec![0, 1])));
+    r.add(Box::new(AllDiff::new(vec![0, 1], &s)));
     
     // Should detect conflict during fixpoint
     let result = r.fixpoint(&mut s);

@@ -20,10 +20,10 @@ pub enum Constraint {
     Xor(usize, usize, usize),
 }
 
-fn to_propagator(c: &Constraint) -> Box<dyn Propagator> {
+fn to_propagator(c: &Constraint, store: &Store) -> Box<dyn Propagator> {
     match c {
         Constraint::NeqLinear(t, k) => Box::new(NeqLinear::new(t.clone(), *k)),
-        Constraint::AllDiff(v) => Box::new(AllDiff::new(v.clone())),
+        Constraint::AllDiff(v) => Box::new(AllDiff::new(v.clone(), store)),
         Constraint::LinearEq(t, r) => Box::new(LinearEq::new(t.clone(), *r)),
         Constraint::LeLinear(t, r) => Box::new(LeLinear::new(t.clone(), *r)),
         Constraint::NonZero(i) => Box::new(NonZero::new(*i)),
@@ -73,7 +73,7 @@ impl CustomSolver {
 impl Solver for CustomSolver {
     fn post(&mut self, c: Constraint) -> Result<(), Conflict> {
         self.constraints.push(c.clone());
-        self.registry.add(to_propagator(&c));
+        self.registry.add(to_propagator(&c, &self.store));
         self.registry.fixpoint(&mut self.store)?;
         Ok(())
     }
@@ -81,11 +81,11 @@ impl Solver for CustomSolver {
     fn entails(&self, c: &Constraint) -> bool {
         // ponytail: entailment = all involved cells fixed and constraint holds;
         // add real entailment (bounds reasoning) when needed.
-        let involved: Vec<usize> = to_propagator(c).cells().to_vec();
+        let involved: Vec<usize> = to_propagator(c, &self.store).cells().to_vec();
         if !involved.iter().all(|&c| self.store.is_fixed(c)) { return false; }
         let mut scratch = Store::new(&self.domains);
         for &c in &involved { scratch.commit(c, self.store.value(c)).unwrap(); }
-        to_propagator(c).propagate(&mut scratch).is_ok()
+        to_propagator(c, &scratch).propagate(&mut scratch).is_ok()
     }
 
     fn solve(&mut self) -> Option<Vec<i64>> {

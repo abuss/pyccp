@@ -1,5 +1,5 @@
 use pyccp_core::store::Store;
-use pyccp_core::propagators::{should_use_ac4, AllDiffState, AllDiffAlgorithm, propagate_ac4};
+use pyccp_core::propagators::{should_use_ac4, AllDiffState, AllDiffAlgorithm, propagate_ac4, AllDiff, Propagator};
 
 #[test]
 fn test_ac4_enabled_for_small_domains() {
@@ -117,4 +117,44 @@ fn test_ac4_detects_conflict() {
     
     let result = propagate_ac4(&mut state, &mut store);
     assert!(result.is_err(), "AC-4 should detect conflict when two vars must have same value");
+}
+
+#[test]
+fn test_propagate_dispatcher_ac4_mode() {
+    // Small domains [1,2,3] and [1,2,3] → should trigger AC-4
+    let store = Store::new(&[vec![1, 2, 3], vec![1, 2, 3]]);
+    let mut constraint = AllDiff::new(vec![0, 1], &store);
+    
+    // Assert: constraint.state.algorithm == AllDiffAlgorithm::AC4
+    assert_eq!(
+        constraint.state.algorithm as u8,
+        AllDiffAlgorithm::AC4 as u8,
+        "Small domain constraint should use AC-4"
+    );
+    
+    // Call propagate, assert Ok(())
+    let mut store_copy = Store::new(&[vec![1, 2, 3], vec![1, 2, 3]]);
+    let result = constraint.propagate(&mut store_copy);
+    assert!(result.is_ok(), "Propagate should succeed with AC-4");
+}
+
+#[test]
+fn test_propagate_dispatcher_simple_mode() {
+    // Large domains [0..1001] and [0..1001] → should use simple
+    let domain_0: Vec<i64> = (0..=1000).collect();
+    let domain_1: Vec<i64> = (0..=1000).collect();
+    let store = Store::new(&[domain_0.clone(), domain_1.clone()]);
+    let mut constraint = AllDiff::new(vec![0, 1], &store);
+    
+    // Assert: constraint.state.algorithm == AllDiffAlgorithm::SimpleIntersection
+    assert_eq!(
+        constraint.state.algorithm as u8,
+        AllDiffAlgorithm::SimpleIntersection as u8,
+        "Large domain constraint should use simple propagation"
+    );
+    
+    // Call propagate, assert Ok(())
+    let mut store_copy = Store::new(&[domain_0, domain_1]);
+    let result = constraint.propagate(&mut store_copy);
+    assert!(result.is_ok(), "Propagate should succeed with simple mode");
 }

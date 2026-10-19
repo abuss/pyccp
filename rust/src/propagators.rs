@@ -147,6 +147,65 @@ pub fn propagate_ac4(
     Ok(())
 }
 
+/// Simple AllDiff propagation: remove fixed values and detect conflicts.
+/// Used as fallback when AC-4 is not suitable (large domains, many variables, etc).
+pub fn propagate_simple(cells: &[usize], store: &mut Store) -> Result<(), Conflict> {
+    // Phase 1: Remove fixed values from domains
+    for &var_i in cells {
+        if store.is_fixed(var_i) {
+            let value = store.value(var_i);
+            for &var_j in cells {
+                if var_i != var_j {
+                    store.remove(var_j, value)?;
+                }
+            }
+        }
+    }
+    
+    // Phase 2: Check for unsupported values and fix unique supporters
+    let mut values = std::collections::HashSet::new();
+    for &var in cells {
+        for &val in store.domain(var).iter() {
+            values.insert(val);
+        }
+    }
+    let mut sorted: Vec<i64> = values.into_iter().collect();
+    sorted.sort();
+    
+    for value in sorted {
+        // Count supporters: both fixed variables assigned v and unfixed variables with v
+        let supporters: Vec<usize> = cells.iter()
+            .filter(|&&var| {
+                if store.is_fixed(var) {
+                    store.value(var) == value
+                } else {
+                    store.domain(var).contains(value)
+                }
+            })
+            .copied()
+            .collect();
+        
+        match supporters.len() {
+            0 => {
+                // Value v has no support (not used by any variable)
+                // This is not a conflict - it just means v won't be assigned
+            }
+            1 => {
+                // Value v can only go to one variable; fix it if not already fixed
+                let var = supporters[0];
+                if !store.is_fixed(var) {
+                    store.commit(var, value)?;
+                }
+            }
+            _ => {
+                // Multiple supporters; ok (no more pruning needed here)
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 pub trait Propagator: Send + Sync {
     fn cells(&self) -> &[usize];
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict>;
@@ -222,80 +281,40 @@ impl Propagator for NeqLinear {
     }
 }
 
-pub struct AllDiff { cells: Vec<usize> }
+pub struct AllDiff {
+    pub cells: Vec<usize>,
+    pub state: AllDiffState,
+}
 impl AllDiff {
-    pub fn new(cells: Vec<usize>) -> AllDiff { AllDiff { cells } }
-
-    /// AC-3 algorithm for AllDiff constraint.
-    /// 
-    /// Phase 1: Remove values from fixed variables
-    /// - For each fixed variable with value v, remove v from all other variables
-    /// 
-    /// Phase 2: Check support and fix unique supporters
-    /// - For each value v in the union of all domains:
-    ///   - Count unfixed variables that have v in their domain
-    ///   - If count == 0 and a fixed variable has v: conflict
-    ///   - If count == 1: fix that variable to v
-    fn collect_all_values(&self, store: &Store) -> Vec<i64> {
-        let mut values = std::collections::HashSet::new();
-        for &var in &self.cells {
-            for &val in store.domain(var).iter() {
-                values.insert(val);
-            }
+    pub fn new(cells: Vec<usize>, store: &Store) -> AllDiff {
+        let algorithm = if should_use_ac4(&cells, store) {
+            AllDiffAlgorithm::AC4
+        } else {
+            AllDiffAlgorithm::SimpleIntersection
+        };
+        
+        AllDiff {
+            cells: cells.clone(),
+            state: AllDiffState {
+                algorithm,
+                vars: cells,
+                support_map: None,
+                supports_initialized: false,
+            },
         }
-        let mut sorted: Vec<i64> = values.into_iter().collect();
-        sorted.sort();
-        sorted
     }
 }
 impl Propagator for AllDiff {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // Phase 1: Remove fixed values from domains
-        for &var_i in &self.cells {
-            if store.is_fixed(var_i) {
-                let value = store.value(var_i);
-                for &var_j in &self.cells {
-                    if var_i != var_j {
-                        store.remove(var_j, value)?;
-                    }
-                }
+        match self.state.algorithm {
+            AllDiffAlgorithm::AC4 => {
+                propagate_ac4(&mut self.state, store)
+            }
+            AllDiffAlgorithm::SimpleIntersection => {
+                propagate_simple(&self.cells, store)
             }
         }
-        
-        // Phase 2: Check for unsupported values and fix unique supporters
-        for value in self.collect_all_values(store) {
-            // Count supporters: both fixed variables assigned v and unfixed variables with v
-            let supporters: Vec<usize> = self.cells.iter()
-                .filter(|&&var| {
-                    if store.is_fixed(var) {
-                        store.value(var) == value
-                    } else {
-                        store.domain(var).contains(value)
-                    }
-                })
-                .copied()
-                .collect();
-            
-            match supporters.len() {
-                0 => {
-                    // Value v has no support (not used by any variable)
-                    // This is not a conflict - it just means v won't be assigned
-                }
-                1 => {
-                    // Value v can only go to one variable; fix it if not already fixed
-                    let var = supporters[0];
-                    if !store.is_fixed(var) {
-                        store.commit(var, value)?;
-                    }
-                }
-                _ => {
-                    // Multiple supporters; ok (no more pruning needed here)
-                }
-            }
-        }
-        
-        Ok(())
     }
 }
 
@@ -834,9 +853,15 @@ mod tests {
 
     #[test]
     fn all_diff_prunes() {
-        let mut s = Store::new(&[vec![1, 2], vec![1, 2], vec![1, 2, 3]]);
+        // Use large enough domains to force SimpleIntersection algorithm
+        // Creating domains [1..501], [2..502], [3..503] will exceed AC4_DOMAIN_SIZE_THRESHOLD of 500
+        let domain_0: Vec<i64> = (1..=501).collect();
+        let domain_1: Vec<i64> = (2..=502).collect();
+        let domain_2: Vec<i64> = (3..=503).collect();
+        
+        let mut s = Store::new(&[domain_0, domain_1, domain_2]);
         let mut r = Registry::new();
-        r.add(Box::new(AllDiff::new(vec![0, 1, 2])));
+        r.add(Box::new(AllDiff::new(vec![0, 1, 2], &s)));
         s.commit(0, 1).unwrap();
         s.commit(1, 2).unwrap();
         r.fixpoint(&mut s).unwrap();
