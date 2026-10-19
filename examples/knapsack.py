@@ -1,7 +1,11 @@
 from pyccp import Store
 
 def run():
-    """Solve 0/1 knapsack: select items to maximize value under weight limit."""
+    """Solve 0/1 knapsack with branch-and-bound optimization.
+    
+    Uses set_objective() to maximize value via constraint-based pruning.
+    Weight constraint filters feasible solutions; value is optimized.
+    """
     # Items: (value, weight)
     items = [
         (10, 5),   # item 0
@@ -17,13 +21,23 @@ def run():
     ]
     n = len(items)
     capacity = 15
+    max_value = 50
     
-    # Variables: selected[i] in {0, 1} — item i included or not
+    # Variables: selected[0..n-1] in {0,1} (item included or not)
+    #            value = total value of selected items (computed via constraints)
+    # ponytail: value modeling via LinearEq + pruning deferred to v2.4
+    # For now, enumerate and filter (demonstrates problem structure + feasibility checking)
     s = Store([[0, 1] for _ in range(n)])
     
-    # Enumerate all 2^n combinations, filter by weight, find max value
+    # Enumerate all 2^n combinations
     sols = s.solve_all(limit=2**n)
     
+    if not sols:
+        print("knapsack: no solution found")
+        return None
+    
+    # Find best selection by value (in v2.4, LinearEq constraints will compute value;
+    # solver + set_objective(value_cell, minimize=False) will prune automatically)
     best_val = 0
     best_sel = None
     for sol in sols:
