@@ -1,4 +1,4 @@
-use pyccp_core::propagators::{LinearEq, LessThan, NeqLinear, Multiply, Element, Registry};
+use pyccp_core::propagators::{LinearEq, LessThan, NeqLinear, Multiply, Element, AllDiff, Registry};
 use pyccp_core::store::{Store, Conflict};
 
 /// Test bounds conflict detection: x + y = 100, x ∈ [0,5], y ∈ [0,5]
@@ -302,4 +302,55 @@ fn test_element_bounds_no_intersection() {
     // Run propagation to fixpoint
     // No valid indices (no array value intersects with y bounds)
     assert_eq!(r.fixpoint(&mut s), Err(Conflict), "Should detect conflict: no valid indices");
+}
+
+/// Test AllDiff bounds reasoning: disjoint intervals pigeonhole principle.
+/// Variables with bounds that don't cause conflicts:
+///   x0 ∈ [1, 2]
+///   x1 ∈ [3, 4]
+///   x2 ∈ [5, 6]
+#[test]
+fn test_alldiff_bounds_disjoint_intervals() {
+    let mut s = Store::new(&[
+        vec![1, 2],     // x0 ∈ [1, 2]
+        vec![3, 4],     // x1 ∈ [3, 4]
+        vec![5, 6],     // x2 ∈ [5, 6]
+    ]);
+    let mut r = Registry::new();
+    r.add(Box::new(AllDiff::new(vec![0, 1, 2])));
+    
+    let result = r.fixpoint(&mut s);
+    assert!(result.is_ok(), "Disjoint intervals should not cause conflict");
+}
+
+/// Test AllDiff bounds pigeonhole conflict: too many vars in too small an interval.
+#[test]
+fn test_alldiff_bounds_pigeonhole_conflict() {
+    let mut s = Store::new(&[
+        vec![1, 2],      // x0 ∈ [1, 2]
+        vec![1, 2],      // x1 ∈ [1, 2]
+        vec![1, 2],      // x2 ∈ [1, 2]
+    ]);
+    let mut r = Registry::new();
+    r.add(Box::new(AllDiff::new(vec![0, 1, 2])));
+    
+    assert_eq!(r.fixpoint(&mut s), Err(Conflict), "Should detect pigeonhole conflict: 3 vars in [1, 2]");
+}
+
+/// Test AllDiff bounds exact fit: vars tighten to constrained interval.
+#[test]
+fn test_alldiff_bounds_exact_fit() {
+    let mut s = Store::new(&[
+        vec![1, 2],       // x0: bounds=[1,2], domain=[1,2]
+        vec![3, 4],       // x1: bounds=[3,4], domain=[3,4]
+        vec![1, 2, 3, 4], // x2: bounds=[1,4], domain=[1,2,3,4]
+    ]);
+    let mut r = Registry::new();
+    r.add(Box::new(AllDiff::new(vec![0, 1, 2])));
+    
+    r.fixpoint(&mut s).unwrap();
+    
+    let x2_bounds = s.bounds(2);
+    assert_eq!(x2_bounds.min, 1, "x2 bounds.min should be tightened to 1");
+    assert_eq!(x2_bounds.max, 2, "x2 bounds.max should be tightened to 2");
 }

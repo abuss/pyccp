@@ -79,16 +79,6 @@ pub struct AllDiff { cells: Vec<usize> }
 impl AllDiff {
     pub fn new(cells: Vec<usize>) -> AllDiff { AllDiff { cells } }
 
-    /// AC-3 algorithm for AllDiff constraint.
-    /// 
-    /// Phase 1: Remove values from fixed variables
-    /// - For each fixed variable with value v, remove v from all other variables
-    /// 
-    /// Phase 2: Check support and fix unique supporters
-    /// - For each value v in the union of all domains:
-    ///   - Count unfixed variables that have v in their domain
-    ///   - If count == 0 and a fixed variable has v: conflict
-    ///   - If count == 1: fix that variable to v
     fn collect_all_values(&self, store: &Store) -> Vec<i64> {
         let mut values = std::collections::HashSet::new();
         for &var in &self.cells {
@@ -100,10 +90,61 @@ impl AllDiff {
         sorted.sort();
         sorted
     }
+
+    fn propagate_bounds_reasoning(&mut self, store: &mut Store) -> Result<(), Conflict> {
+        let mut intervals: Vec<(i64, i64, usize)> = self.cells.iter()
+            .filter(|&&c| !store.is_fixed(c))
+            .map(|&c| {
+                let b = store.bounds(c);
+                (b.min, b.max, c)
+            })
+            .collect();
+        
+        if intervals.is_empty() {
+            return Ok(());
+        }
+        
+        intervals.sort_by_key(|x| (x.0, x.1));
+        
+        let mut i = 0;
+        while i < intervals.len() {
+            let (min_a, max_a, _) = intervals[i];
+            let mut count = 1;
+            let mut j = i + 1;
+            
+            while j < intervals.len() {
+                let (min_b, _, _) = intervals[j];
+                if min_b <= max_a {
+                    count += 1;
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+            
+            let available = max_a - min_a + 1;
+            if count > available {
+                return Err(Conflict);
+            }
+            
+            if count == available {
+                let bounds_ab = crate::store::Bounds::new(min_a, max_a);
+                for k in i..j {
+                    store.tighten_bounds(intervals[k].2, bounds_ab)?;
+                }
+            }
+            
+            i = j;
+        }
+        
+        Ok(())
+    }
 }
 impl Propagator for AllDiff {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
+        self.propagate_bounds_reasoning(store)?;
+        
         // Phase 1: Remove fixed values from domains
         for &var_i in &self.cells {
             if store.is_fixed(var_i) {
@@ -118,7 +159,6 @@ impl Propagator for AllDiff {
         
         // Phase 2: Check for unsupported values and fix unique supporters
         for value in self.collect_all_values(store) {
-            // Count supporters: both fixed variables assigned v and unfixed variables with v
             let supporters: Vec<usize> = self.cells.iter()
                 .filter(|&&var| {
                     if store.is_fixed(var) {
@@ -131,20 +171,14 @@ impl Propagator for AllDiff {
                 .collect();
             
             match supporters.len() {
-                0 => {
-                    // Value v has no support (not used by any variable)
-                    // This is not a conflict - it just means v won't be assigned
-                }
+                0 => {}
                 1 => {
-                    // Value v can only go to one variable; fix it if not already fixed
                     let var = supporters[0];
                     if !store.is_fixed(var) {
                         store.commit(var, value)?;
                     }
                 }
-                _ => {
-                    // Multiple supporters; ok (no more pruning needed here)
-                }
+                _ => {}
             }
         }
         
@@ -205,8 +239,15 @@ impl Propagator for LinearEq {
             if k == 0 { return Err(Conflict); }
             if sum % k != 0 { return Err(Conflict); }
             let v = sum / k;
-            for cur in store.domain(c).to_vec() {
-                if cur != v { store.remove(c, cur)?; }
+            
+            // Bounds-aware path: if domain is Bounds, tighten instead of enumerate
+            if store.is_bounds_domain(c) {
+                store.tighten_bounds(c, crate::store::Bounds::new(v, v))?;
+            } else {
+                // Vec domain: use existing enumerate logic
+                for cur in store.domain(c).to_vec() {
+                    if cur != v { store.remove(c, cur)?; }
+                }
             }
         } else {
             let mut total = 0;

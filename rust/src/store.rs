@@ -28,11 +28,11 @@ impl Bounds {
     }
 }
 
-/// Hybrid domain representation: Vec for small domains, BitSet for large ones
+/// Hybrid domain representation: Vec for small domains, Bounds for large ones
 #[derive(Debug, Clone, PartialEq)]
 pub enum Domain {
     Vec(std::vec::Vec<i64>),
-    // BitSet variant reserved for future optimization
+    Bounds(i64, i64), // [min, max] interval
 }
 
 impl Domain {
@@ -56,6 +56,18 @@ impl Domain {
                     Err(_) => false,
                 }
             }
+            Domain::Bounds(min, max) => {
+                // Only boundary removal is supported
+                if value == *min && value < *max {
+                    *self = Domain::Bounds(*min + 1, *max);
+                    true
+                } else if value == *max && value > *min {
+                    *self = Domain::Bounds(*min, *max - 1);
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
 
@@ -63,6 +75,7 @@ impl Domain {
     pub fn is_empty(&self) -> bool {
         match self {
             Domain::Vec(vec) => vec.is_empty(),
+            Domain::Bounds(min, max) => min > max,
         }
     }
 
@@ -70,6 +83,7 @@ impl Domain {
     pub fn len(&self) -> usize {
         match self {
             Domain::Vec(vec) => vec.len(),
+            Domain::Bounds(min, max) => if min <= max { (max - min + 1) as usize } else { 0 },
         }
     }
 
@@ -77,6 +91,7 @@ impl Domain {
     pub fn contains(&self, value: i64) -> bool {
         match self {
             Domain::Vec(vec) => vec.binary_search(&value).is_ok(),
+            Domain::Bounds(min, max) => value >= *min && value <= *max,
         }
     }
 
@@ -84,6 +99,7 @@ impl Domain {
     pub fn iter(&self) -> Box<dyn Iterator<Item = &i64> + '_> {
         match self {
             Domain::Vec(vec) => Box::new(vec.iter()),
+            Domain::Bounds(_, _) => Box::new(std::iter::empty()),  // Bounds: empty (too large to enumerate)
         }
     }
 
@@ -91,6 +107,7 @@ impl Domain {
     pub fn min(&self) -> Option<i64> {
         match self {
             Domain::Vec(vec) => vec.first().copied(),
+            Domain::Bounds(min, max) => if min <= max { Some(*min) } else { None },
         }
     }
 
@@ -98,6 +115,7 @@ impl Domain {
     pub fn max(&self) -> Option<i64> {
         match self {
             Domain::Vec(vec) => vec.last().copied(),
+            Domain::Bounds(min, max) => if min <= max { Some(*max) } else { None },
         }
     }
 
@@ -105,6 +123,13 @@ impl Domain {
     pub fn to_vec(&self) -> std::vec::Vec<i64> {
         match self {
             Domain::Vec(vec) => vec.clone(),
+            Domain::Bounds(min, max) => {
+                if min <= max {
+                    (*min..=*max).collect()
+                } else {
+                    vec![]
+                }
+            }
         }
     }
 }
@@ -157,6 +182,10 @@ impl Store {
     pub fn value(&self, cell: usize) -> i64 {
         match &self.cells[cell] {
             Domain::Vec(vec) => vec[0],
+            Domain::Bounds(min, max) => {
+                assert!(min == max, "value() called on non-fixed Bounds domain");
+                *min
+            }
         }
     }
 
@@ -274,6 +303,14 @@ impl Store {
         } else {
             Err(Conflict)
         }
+    }
+
+    pub fn is_bounds_domain(&self, cell: usize) -> bool {
+        matches!(self.cells[cell], Domain::Bounds(_, _))
+    }
+
+    pub fn is_vec_domain(&self, cell: usize) -> bool {
+        matches!(self.cells[cell], Domain::Vec(_))
     }
 
     pub fn get_changed_vars(&self) -> std::vec::Vec<usize> {
