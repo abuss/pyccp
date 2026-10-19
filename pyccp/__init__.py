@@ -89,13 +89,8 @@ class Store:
         return self._core.best_cost()
 
     def is_bounds_domain(self, cell: int) -> bool:
-        """Check if a domain is represented as Bounds (auto-converted for large domains).
-        
-        For now, this is a placeholder that checks if the domain size would trigger conversion.
-        """
-        # ponytail: direct check not yet exposed from Rust; fallback to domain size heuristic
-        # Add when Rust binding is properly exposed
-        return False
+        """Check if a domain is represented as Bounds (auto-converted for large domains)."""
+        return self._core.check_bounds(cell)
 
 
 async def join(*agents):
