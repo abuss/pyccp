@@ -1,5 +1,5 @@
 use pyccp_core::store::Store;
-use pyccp_core::propagators::{should_use_ac4, AllDiffState, AllDiffAlgorithm, propagate_ac4, AllDiff, Propagator};
+use pyccp_core::propagators::{should_use_ac4, AllDiffState, AllDiffAlgorithm, propagate_ac4, propagate_simple, AllDiff, Propagator};
 
 #[test]
 fn test_ac4_enabled_for_small_domains() {
@@ -157,4 +157,60 @@ fn test_propagate_dispatcher_simple_mode() {
     let mut store_copy = Store::new(&[domain_0, domain_1]);
     let result = constraint.propagate(&mut store_copy);
     assert!(result.is_ok(), "Propagate should succeed with simple mode");
+}
+
+#[test]
+fn test_simple_and_ac4_reach_same_result() {
+    // Setup: 3-variable AllDiff with domains [[1,2], [1,3], [2,3]]
+    let domains = vec![vec![1, 2], vec![1, 3], vec![2, 3]];
+    let vars = vec![0, 1, 2];
+    
+    // Run AC-4 path
+    let mut store_ac4 = Store::new(&domains);
+    let mut state_ac4 = AllDiffState {
+        algorithm: AllDiffAlgorithm::AC4,
+        vars: vars.clone(),
+        support_map: None,
+        supports_initialized: false,
+    };
+    let result_ac4 = propagate_ac4(&mut state_ac4, &mut store_ac4);
+    
+    // Run simple path
+    let mut store_simple = Store::new(&domains);
+    let result_simple = propagate_simple(&vars, &mut store_simple);
+    
+    // Assert: both return same Ok/Err result
+    assert_eq!(
+        result_ac4.is_ok(),
+        result_simple.is_ok(),
+        "AC-4 and simple should both succeed or both fail"
+    );
+    
+    // Assert: final domains are identical
+    for var in &vars {
+        let ac4_domain = store_ac4.domain(*var).to_vec();
+        let simple_domain = store_simple.domain(*var).to_vec();
+        assert_eq!(
+            ac4_domain, simple_domain,
+            "Variable {} should have same domain in both AC-4 and simple; AC-4: {:?}, simple: {:?}",
+            var, ac4_domain, simple_domain
+        );
+    }
+}
+
+#[test]
+fn test_simple_detects_conflicts() {
+    // Setup: impossible constraint: both vars must be 1
+    let domains = vec![vec![1], vec![1]];
+    let vars = vec![0, 1];
+    
+    // Run simple path
+    let mut store = Store::new(&domains);
+    let result = propagate_simple(&vars, &mut store);
+    
+    // Assert: propagate_simple returns Err(Conflict)
+    assert!(
+        result.is_err(),
+        "propagate_simple should detect conflict when two vars must have same value"
+    );
 }
