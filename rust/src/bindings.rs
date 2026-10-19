@@ -34,6 +34,12 @@ fn parse_constraint(c: &Bound<'_, PyAny>, n: usize) -> PyResult<Constraint> {
             let rhs = args.get_item(1)?.extract()?;
             Ok(Constraint::LinearEq(terms, rhs))
         }
+        "le_linear" => {
+            let terms: Vec<(usize, i64)> = args.get_item(0)?.extract()?;
+            for &(i, _) in &terms { check(i)?; }
+            let rhs = args.get_item(1)?.extract()?;
+            Ok(Constraint::LeLinear(terms, rhs))
+        }
         "neq_linear" => {
             let terms: Vec<(usize, i64)> = args.get_item(0)?.extract()?;
             for &(i, _) in &terms { check(i)?; }

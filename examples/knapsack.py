@@ -1,10 +1,10 @@
 from pyccp import Store
 
 def run():
-    """Solve 0/1 knapsack with branch-and-bound optimization.
+    """Solve 0/1 knapsack with in-solver cost computation and branch-and-bound optimization.
     
-    Uses set_objective() to maximize value via constraint-based pruning.
-    Weight constraint filters feasible solutions; value is optimized.
+    Uses LinearEq constraints to compute total value and weight.
+    set_objective() enables B&B pruning to maximize value efficiently.
     """
     # Items: (value, weight)
     items = [
@@ -21,35 +21,73 @@ def run():
     ]
     n = len(items)
     capacity = 15
-    max_value = 50
     
-    # Variables: selected[0..n-1] in {0,1} (item included or not)
-    #            value = total value of selected items (computed via constraints)
-    # ponytail: value modeling via LinearEq + pruning deferred to v2.4
-    # For now, enumerate and filter (demonstrates problem structure + feasibility checking)
-    s = Store([[0, 1] for _ in range(n)])
+    # Variables: selected[0..n-1] ∈ {0,1}, value, weight
+    # Cell indices: selected=0-9, value=10, weight=11
+    s = Store(
+        [[0, 1] for _ in range(n)] +       # selected[0..9], cells 0-9
+        [list(range(50))] +                 # value, cell 10 (max possible: sum of all values)
+        [list(range(50))]                  # weight, cell 11 (max possible: sum of all weights)
+    )
     
-    # Enumerate all 2^n combinations
-    sols = s.solve_all(limit=2**n)
+    selected_start = 0
+    value_cell = n
+    weight_cell = n + 1
     
-    if not sols:
+    # Constraint: Compute total value
+    # value = sum(selected[i] * items[i].value for i in 0..n-1)
+    # Expressed as: sum(selected[i] * items[i].value) - value = 0
+    value_terms = [(i, items[i][0]) for i in range(n)] + [(value_cell, -1)]
+    s.post(("linear_eq", (value_terms, 0)))
+    
+    # Constraint: Compute total weight
+    # weight = sum(selected[i] * items[i].weight for i in 0..n-1)
+    # Expressed as: sum(selected[i] * items[i].weight) - weight = 0
+    weight_terms = [(i, items[i][1]) for i in range(n)] + [(weight_cell, -1)]
+    s.post(("linear_eq", (weight_terms, 0)))
+    
+    # Constraint: Respect capacity limit
+    # weight <= capacity
+    s.post(("le_linear", ([(weight_cell, 1)], capacity)))
+    
+    # Optimization: Maximize value
+    s.set_objective(value_cell, minimize=False)
+    
+    # Solve with branch-and-bound pruning
+    # solve_all() explores all solutions with B&B pruning, tracking best_cost
+    all_solutions = s.solve_all(limit=2**20)  # Limit prevents runaway; B&B prunes most branches
+    
+    if not all_solutions:
         print("knapsack: no solution found")
         return None
     
-    # Find best selection by value (in v2.4, LinearEq constraints will compute value;
-    # solver + set_objective(value_cell, minimize=False) will prune automatically)
-    best_val = 0
-    best_sel = None
-    for sol in sols:
-        total_weight = sum(sol[i] * items[i][1] for i in range(n))
-        if total_weight <= capacity:
-            total_value = sum(sol[i] * items[i][0] for i in range(n))
-            if total_value > best_val:
-                best_val = total_value
-                best_sel = sol
+    # Find the solution with value equal to best_cost (optimal solution)
+    best_cost = s.best_cost()
+    if best_cost is None:
+        print("knapsack: no solution found")
+        return None
     
-    assert best_sel is not None
-    assert best_val >= 25  # Known lower bound for this instance
-    total_weight = sum(best_sel[i] * items[i][1] for i in range(n))
-    print(f"knapsack: selected={best_sel}, value={best_val}, weight={total_weight}")
-    return (best_sel, best_val)
+    # Best cost is the optimal value; find a solution with that value in value_cell
+    solution = None
+    for sol in all_solutions:
+        if sol[value_cell] == best_cost:
+            solution = sol
+            break
+    
+    if not solution:
+        # Fallback (shouldn't happen)
+        solution = all_solutions[0]
+    
+    if not solution:
+        print("knapsack: no solution found")
+        return None
+    
+    # Extract selection and verify
+    selected = solution[:n]
+    total_value = sum(selected[i] * items[i][0] for i in range(n))
+    total_weight = sum(selected[i] * items[i][1] for i in range(n))
+    
+    assert total_weight <= capacity
+    assert total_value >= 25  # Known lower bound for this instance
+    print(f"knapsack: selected={selected}, value={total_value}, weight={total_weight}")
+    return (selected, total_value)

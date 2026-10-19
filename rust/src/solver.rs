@@ -1,4 +1,4 @@
-use crate::propagators::{AllDiff, And, Cardinality, Element, LinearEq, LessThan, Modulo, Multiply, NeqLinear, NonZero, Or, Propagator, Registry, Xor};
+use crate::propagators::{AllDiff, And, Cardinality, Element, LeLinear, LinearEq, LessThan, Modulo, Multiply, NeqLinear, NonZero, Or, Propagator, Registry, Xor};
 use crate::store::{Conflict, Store};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,6 +8,7 @@ pub enum Constraint {
     NeqLinear(Vec<(usize, i64)>, i64),
     AllDiff(Vec<usize>),
     LinearEq(Vec<(usize, i64)>, i64),
+    LeLinear(Vec<(usize, i64)>, i64),
     NonZero(usize),
     LessThan(usize, usize),
     Multiply(usize, usize, i64),
@@ -24,6 +25,7 @@ fn to_propagator(c: &Constraint) -> Box<dyn Propagator> {
         Constraint::NeqLinear(t, k) => Box::new(NeqLinear::new(t.clone(), *k)),
         Constraint::AllDiff(v) => Box::new(AllDiff::new(v.clone())),
         Constraint::LinearEq(t, r) => Box::new(LinearEq::new(t.clone(), *r)),
+        Constraint::LeLinear(t, r) => Box::new(LeLinear::new(t.clone(), *r)),
         Constraint::NonZero(i) => Box::new(NonZero::new(*i)),
         Constraint::LessThan(i, j) => Box::new(LessThan::new(*i, *j)),
         Constraint::Multiply(i, j, k) => Box::new(Multiply::new(*i, *j, *k)),
@@ -125,15 +127,49 @@ impl CustomSolver {
         if self.cancel.load(Ordering::Relaxed) { return None; }
         let cell = match self.store.first_open() {
             Some(c) => c,
-            None => return Some(self.store.assignment()),
+            None => {
+                let solution = self.store.assignment();
+                // Update best_cost if objective is set
+                if let Some((cost_cell, is_minimize)) = self.store.objective {
+                    let cost = solution[cost_cell];
+                    let should_update = match self.store.best_cost {
+                        None => true,
+                        Some(best) => {
+                            if is_minimize { cost < best } else { cost > best }
+                        }
+                    };
+                    if should_update {
+                        self.store.best_cost = Some(cost);
+                    }
+                }
+                return Some(solution);
+            }
         };
         let domain: Vec<i64> = self.value_order(cell);
         for &v in &domain {
             let m = self.store.mark();
-            if self.store.commit(cell, v).is_err() { continue; }
+            if self.store.commit(cell, v).is_err() { 
+                self.store.undo_to(m);
+                continue; 
+            }
             if self.registry.fixpoint(&mut self.store).is_err() {
                 self.store.undo_to(m);
                 continue;
+            }
+            // B&B pruning: if cost cell is fixed and cost can't improve, skip
+            if let Some((cost_cell, is_minimize)) = self.store.objective {
+                if let Some(best) = self.store.best_cost {
+                    if self.store.is_fixed(cost_cell) {
+                        let current_cost = self.store.value(cost_cell);
+                        if is_minimize && current_cost >= best {
+                            self.store.undo_to(m);
+                            continue;
+                        } else if !is_minimize && current_cost <= best {
+                            self.store.undo_to(m);
+                            continue;
+                        }
+                    }
+                }
             }
             if let Some(sol) = self.dfs() { return Some(sol); }
             self.store.undo_to(m);

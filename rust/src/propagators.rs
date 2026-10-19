@@ -217,6 +217,102 @@ impl Propagator for LinearEq {
     }
 }
 
+pub struct LeLinear { cells: Vec<usize>, terms: Vec<(usize, i64)>, rhs: i64 }
+impl LeLinear {
+    pub fn new(terms: Vec<(usize, i64)>, rhs: i64) -> LeLinear {
+        LeLinear { cells: terms.iter().map(|t| t.0).collect(), terms, rhs }
+    }
+
+    /// Compute min/max possible sum across all variables in the constraint.
+    /// Similar to LinearEq: we need sum <= rhs, so min_sum is always achievable
+    /// and max_sum gives us the tightest upper bound.
+    fn compute_bounds(&self, store: &Store) -> (i64, i64) {
+        let mut min_sum = 0i64;
+        let mut max_sum = 0i64;
+        
+        for (var, coeff) in &self.terms {
+            let bounds = store.bounds(*var);
+            if *coeff > 0 {
+                min_sum += coeff * bounds.min;
+                max_sum += coeff * bounds.max;
+            } else if *coeff < 0 {
+                min_sum += coeff * bounds.max;
+                max_sum += coeff * bounds.min;
+            }
+        }
+        
+        (min_sum, max_sum)
+    }
+}
+
+impl Propagator for LeLinear {
+    fn cells(&self) -> &[usize] { &self.cells }
+    fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
+        // For sum <= rhs: conflict if min_sum > rhs
+        let (min_sum, max_sum) = self.compute_bounds(store);
+        if min_sum > self.rhs {
+            return Err(Conflict);
+        }
+        // If max_sum <= rhs, constraint is always satisfied; no pruning needed
+        if max_sum <= self.rhs {
+            return Ok(());
+        }
+        
+        // Bounds-based pruning: for each term (var, coeff),
+        // compute the maximum value it can take without violating the constraint
+        // Constraint: sum(coeff_i * var_i) <= rhs
+        // So for term j: coeff_j * var_j <= rhs - sum_{i≠j}(coeff_i * var_i)
+        
+        for (j, (var, coeff)) in self.terms.iter().enumerate() {
+            if *coeff == 0 { continue; }
+            
+            let bounds = store.bounds(*var);
+            
+            // Compute max sum of all OTHER variables
+            let mut other_max = 0i64;
+            for (i, (other_var, other_coeff)) in self.terms.iter().enumerate() {
+                if i == j { continue; }
+                let other_bounds = store.bounds(*other_var);
+                if *other_coeff > 0 {
+                    other_max += other_coeff * other_bounds.max;
+                } else if *other_coeff < 0 {
+                    other_max += other_coeff * other_bounds.min;
+                }
+            }
+            
+            // Maximum value for this variable: coeff * var <= rhs - other_max
+            // So var <= (rhs - other_max) / coeff
+            // But we need to be careful with negative coefficients
+            
+            let space = self.rhs - other_max;
+            
+            let (new_min, new_max) = if *coeff > 0 {
+                // Positive coefficient: var <= space / coeff
+                let max_val = space / *coeff;
+                (bounds.min, max_val)
+            } else {
+                // Negative coefficient: var >= space / coeff (division flips inequality)
+                let min_val = space / *coeff;
+                (min_val, bounds.max)
+            };
+            
+            // Prune domain
+            if new_max < bounds.max {
+                for v in store.domain(*var).to_vec() {
+                    if v > new_max { store.remove(*var, v)?; }
+                }
+            }
+            if new_min > bounds.min {
+                for v in store.domain(*var).to_vec() {
+                    if v < new_min { store.remove(*var, v)?; }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+}
+
 pub struct NonZero { cells: [usize; 1] }
 impl NonZero {
     pub fn new(i: usize) -> NonZero { NonZero { cells: [i] } }
