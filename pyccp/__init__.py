@@ -88,6 +88,11 @@ class Store:
         """Return the best cost found so far, or None if no feasible solution yet."""
         return self._core.best_cost()
 
+    def is_bounds_domain(self, cell: int) -> bool:
+        """Check if a domain is represented as Bounds (auto-converted for large domains)."""
+        return self._core.is_bounds_domain(cell)
+
+
 
 
 async def join(*agents):

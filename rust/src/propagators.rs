@@ -1,5 +1,55 @@
 use crate::store::{Conflict, Store};
 
+// AC-4 tuning constants
+const AC4_DOMAIN_SIZE_THRESHOLD: usize = 500;
+const AC4_CONSTRAINT_DENSITY_MIN: usize = 2;
+const AC4_MAX_VARS: usize = 100;
+
+// AllDiff algorithm selector
+#[derive(Clone, Debug, Copy)]
+pub enum AllDiffAlgorithm {
+    SimpleIntersection,
+    AC4,
+}
+
+// AllDiff state tracking
+pub struct AllDiffState {
+    pub algorithm: AllDiffAlgorithm,
+    pub vars: Vec<usize>,
+    pub support_map: Option<std::collections::HashMap<(usize, i64), Vec<(usize, i64)>>>,
+    pub supports_initialized: bool,
+}
+
+// Heuristic to determine whether AC-4 should be used for AllDiff
+pub fn should_use_ac4(vars: &[usize], store: &Store) -> bool {
+    // Return false if any variable has a Bounds domain (skip AC-4 for sparse domains)
+    for &var in vars {
+        if store.is_bounds_domain(var) {
+            return false;
+        }
+    }
+    
+    // Return false if vars.len() > 100 (memory safety limit)
+    if vars.len() > AC4_MAX_VARS {
+        return false;
+    }
+    
+    // Return false if less than 2 variables (no constraint)
+    if vars.len() < AC4_CONSTRAINT_DENSITY_MIN {
+        return false;
+    }
+    
+    // Calculate average domain size across all variables
+    let mut total_size = 0usize;
+    for &var in vars {
+        total_size += store.domain(var).len();
+    }
+    let avg_domain_size = if vars.is_empty() { 0 } else { total_size / vars.len() };
+    
+    // Return true if avg_domain_size <= 500
+    avg_domain_size <= AC4_DOMAIN_SIZE_THRESHOLD
+}
+
 pub trait Propagator: Send + Sync {
     fn cells(&self) -> &[usize];
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict>;

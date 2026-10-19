@@ -140,6 +140,10 @@ impl PyStore {
     fn best_cost(&self) -> Option<i64> {
         self.solver.best_cost()
     }
+
+    fn is_bounds_domain(&self, cell: i32) -> bool {
+        self.solver.is_bounds_domain(cell as usize)
+    }
 }
 
 impl PyStore {
