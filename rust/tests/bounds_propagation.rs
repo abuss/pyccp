@@ -1,4 +1,4 @@
-use pyccp_core::propagators::{LinearEq, LessThan, NeqLinear, Registry};
+use pyccp_core::propagators::{LinearEq, LessThan, NeqLinear, Multiply, Registry};
 use pyccp_core::store::{Store, Conflict};
 
 /// Test bounds conflict detection: x + y = 100, x ∈ [0,5], y ∈ [0,5]
@@ -142,5 +142,85 @@ fn test_neq_linear_bounds_nqueens_diagonal() {
     // No bounds-based early conflict (need domain propagation or all-but-one)
     assert_eq!(s.domain(0).len(), 8, "q1 domain should not be pruned by bounds alone");
     assert_eq!(s.domain(1).len(), 8, "q2 domain should not be pruned by bounds alone");
+}
+
+/// Test Multiply bounds divisibility: x * y = 12 with x ∈ [3,5], y ∈ [1,10]
+/// Divisibility: both x and y must divide 12
+/// Valid divisors of 12: ±1, ±2, ±3, ±4, ±6, ±12
+/// x ∈ [3,5] ∩ divisors = {3, 4}, y ∈ [1,10] ∩ divisors = {1,2,3,4,6}
+#[test]
+fn test_multiply_bounds_divisibility_pruning() {
+    let mut s = Store::new(&[vec![3, 4, 5], vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]);
+    let mut r = Registry::new();
+    r.add(Box::new(Multiply::new(0, 1, 12)));
+    
+    // Run propagation to fixpoint
+    r.fixpoint(&mut s).unwrap();
+    
+    // x should be pruned to divisors of 12 in [3,5]
+    assert_eq!(s.domain(0).to_vec(), vec![3, 4], "x should be pruned to divisors of 12");
+    
+    // y should be pruned to divisors of 12 in [1,10]
+    assert_eq!(s.domain(1).to_vec(), vec![1, 2, 3, 4, 6], "y should be pruned to divisors of 12");
+}
+
+/// Test Multiply with one side fixed: x * y = 12, fix x = 3 -> y = 4
+#[test]
+fn test_multiply_bounds_one_side_fixed() {
+    let mut s = Store::new(&[vec![3], vec![1, 2, 3, 4, 5, 6, 10, 12]]);
+    let mut r = Registry::new();
+    r.add(Box::new(Multiply::new(0, 1, 12)));
+    
+    // Fix x = 3
+    s.commit(0, 3).unwrap();
+    
+    // Run propagation to fixpoint
+    r.fixpoint(&mut s).unwrap();
+    
+    // y should be fixed to 4 (12 / 3 = 4)
+    assert!(s.is_fixed(1), "y should be fixed");
+    assert_eq!(s.value(1), 4, "y should be 4");
+}
+
+/// Test Multiply bounds divisibility: x * y = 12 with both open
+/// x ∈ [3,5], y ∈ [1,10]
+/// Divisors of 12 in x: {3,4}, divisors of 12 in y: {1,2,3,4,6}
+/// Bounds reasoning should prune non-divisors from both domains
+#[test]
+fn test_multiply_bounds_prune_invalid_divisors() {
+    let mut s = Store::new(&[vec![3, 4, 5], vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]);
+    let mut r = Registry::new();
+    r.add(Box::new(Multiply::new(0, 1, 12)));
+    
+    // Run propagation to fixpoint
+    r.fixpoint(&mut s).unwrap();
+    
+    // x: 5 is not a divisor of 12, should be pruned
+    assert!(!s.domain(0).to_vec().contains(&5), "5 is not a divisor of 12, should be pruned from x");
+    assert_eq!(s.domain(0).to_vec(), vec![3, 4], "x should contain only divisors of 12");
+    
+    // y: 5,7,8,9,10 are not divisors of 12, should be pruned
+    let y_vals = s.domain(1).to_vec();
+    assert!(!y_vals.contains(&5), "5 is not a divisor of 12");
+    assert!(!y_vals.contains(&7), "7 is not a divisor of 12");
+    assert!(!y_vals.contains(&8), "8 is not a divisor of 12");
+    assert_eq!(s.domain(1).to_vec(), vec![1, 2, 3, 4, 6], "y should contain only divisors of 12");
+}
+
+/// Test Multiply with zero: x * y = 0, x ∈ [0,5], y ∈ [0,10]
+/// If one is 0, the other can be anything; if neither 0, product != 0
+#[test]
+fn test_multiply_bounds_zero_constraint() {
+    let mut s = Store::new(&[vec![0, 1, 2, 3, 4, 5], vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]);
+    let mut r = Registry::new();
+    r.add(Box::new(Multiply::new(0, 1, 0)));
+    
+    // Run propagation to fixpoint
+    r.fixpoint(&mut s).unwrap();
+    
+    // Both have 0 in domain initially (at least one must be 0)
+    // Bounds reasoning: both must divide 0 (only 0 divides 0 conceptually, but we handle it specially)
+    assert!(s.domain(0).contains(0), "x should contain 0");
+    assert!(s.domain(1).contains(0), "y should contain 0");
 }
 

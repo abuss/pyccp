@@ -285,11 +285,14 @@ impl Multiply { pub fn new(i: usize, j: usize, k: i64) -> Multiply { Multiply { 
 impl Propagator for Multiply {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: prunes only when one side is fixed.
         let [i, j] = self.cells;
+        
+        // Both fixed: verify constraint
         if store.is_fixed(i) && store.is_fixed(j) {
             return if store.value(i) * store.value(j) == self.k { Ok(()) } else { Err(Conflict) };
         }
+        
+        // One fixed: original all-but-one logic
         for (a, b) in [(i, j), (j, i)] {
             if store.is_fixed(a) {
                 let v = store.value(a);
@@ -298,6 +301,31 @@ impl Propagator for Multiply {
                 store.commit(b, self.k / v)?;
             }
         }
+        
+        // Both open: bounds-based divisibility reasoning
+        // Only values that divide k are valid (necessary for x * y = k)
+        if !store.is_fixed(i) && !store.is_fixed(j) {
+            // Prune i: only divisors of k are valid
+            let i_domain: Vec<i64> = store.domain(i).to_vec();
+            for &val in &i_domain {
+                if val == 0 {
+                    if self.k != 0 { store.remove(i, val)?; }
+                } else if self.k % val != 0 {
+                    store.remove(i, val)?;
+                }
+            }
+            
+            // Prune j: only divisors of k are valid
+            let j_domain: Vec<i64> = store.domain(j).to_vec();
+            for &val in &j_domain {
+                if val == 0 {
+                    if self.k != 0 { store.remove(j, val)?; }
+                } else if self.k % val != 0 {
+                    store.remove(j, val)?;
+                }
+            }
+        }
+        
         Ok(())
     }
 }
