@@ -10,30 +10,67 @@ impl NeqLinear {
     pub fn new(terms: Vec<(usize, i64)>, k: i64) -> NeqLinear {
         NeqLinear { cells: terms.iter().map(|t| t.0).collect(), terms, k }
     }
+
+    /// Compute min/max possible sum for open (unfixed) terms.
+    /// Follows LinearEq::compute_bounds pattern.
+    fn compute_bounds_for_open(&self, store: &Store, open_terms: &[(usize, i64)], fixed_sum: i64) -> (i64, i64) {
+        let mut min_open = 0i64;
+        let mut max_open = 0i64;
+        
+        for (var, coeff) in open_terms {
+            let bounds = store.bounds(*var);
+            if *coeff > 0 {
+                min_open += coeff * bounds.min;
+                max_open += coeff * bounds.max;
+            } else if *coeff < 0 {
+                min_open += coeff * bounds.max;
+                max_open += coeff * bounds.min;
+            }
+        }
+        
+        (fixed_sum + min_open, fixed_sum + max_open)
+    }
 }
 impl Propagator for NeqLinear {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: prunes only when all-but-one term is fixed; add bounds
-        // reasoning when interval propagation is needed.
+        // Collect open (unfixed) and fixed terms
         let open: Vec<(usize, i64)> = self.terms.iter()
             .filter(|(c, _)| !store.is_fixed(*c)).copied().collect();
-        let mut sum = 0;
+        let mut fixed_sum = 0i64;
         for (c, k) in &self.terms {
-            if store.is_fixed(*c) { sum += k * store.value(*c); }
+            if store.is_fixed(*c) { fixed_sum += k * store.value(*c); }
         }
+        
+        // No open terms: check if fixed sum == k (conflict if true)
         if open.is_empty() {
-            return if sum == self.k { Err(Conflict) } else { Ok(()) };
+            return if fixed_sum == self.k { Err(Conflict) } else { Ok(()) };
         }
+        
+        // Exactly one open term: direct solve
         if open.len() == 1 {
             let (c, coef) = open[0];
             if coef == 0 { return Err(Conflict); }
-            let rem = self.k - sum;
+            let rem = self.k - fixed_sum;
             if rem % coef == 0 {
                 let v = rem / coef;
                 if store.domain(c).contains(v) { store.remove(c, v)?; }
             }
+            return Ok(());
         }
+        
+        // Multiple open terms: bounds-based reasoning
+        let (min_sum, max_sum) = self.compute_bounds_for_open(store, &open, fixed_sum);
+        
+        // Early conflict: if we can only achieve sum == k, the constraint fails
+        // This only happens if min_sum == max_sum == k
+        if min_sum == max_sum && min_sum == self.k {
+            return Err(Conflict);
+        }
+        
+        // If k is not in [min_sum, max_sum], the constraint is automatically satisfied
+        // (we can't make sum == k, so != is always true)
+        
         Ok(())
     }
 }
@@ -248,11 +285,14 @@ impl Multiply { pub fn new(i: usize, j: usize, k: i64) -> Multiply { Multiply { 
 impl Propagator for Multiply {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: prunes only when one side is fixed.
         let [i, j] = self.cells;
+        
+        // Both fixed: verify constraint
         if store.is_fixed(i) && store.is_fixed(j) {
             return if store.value(i) * store.value(j) == self.k { Ok(()) } else { Err(Conflict) };
         }
+        
+        // One fixed: original all-but-one logic
         for (a, b) in [(i, j), (j, i)] {
             if store.is_fixed(a) {
                 let v = store.value(a);
@@ -261,6 +301,31 @@ impl Propagator for Multiply {
                 store.commit(b, self.k / v)?;
             }
         }
+        
+        // Both open: bounds-based divisibility reasoning
+        // Only values that divide k are valid (necessary for x * y = k)
+        if !store.is_fixed(i) && !store.is_fixed(j) {
+            // Prune i: only divisors of k are valid
+            let i_domain: Vec<i64> = store.domain(i).to_vec();
+            for &val in &i_domain {
+                if val == 0 {
+                    if self.k != 0 { store.remove(i, val)?; }
+                } else if self.k % val != 0 {
+                    store.remove(i, val)?;
+                }
+            }
+            
+            // Prune j: only divisors of k are valid
+            let j_domain: Vec<i64> = store.domain(j).to_vec();
+            for &val in &j_domain {
+                if val == 0 {
+                    if self.k != 0 { store.remove(j, val)?; }
+                } else if self.k % val != 0 {
+                    store.remove(j, val)?;
+                }
+            }
+        }
+        
         Ok(())
     }
 }
@@ -277,8 +342,7 @@ impl Element {
 impl Propagator for Element {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: prunes only when idx or y is fixed; full bidirectional
-        // domain intersection when needed.
+        // idx is fixed: y = array[idx]
         if store.is_fixed(self.idx) {
             let idx = store.value(self.idx);
             if idx < 0 || idx as usize >= self.array.len() { return Err(Conflict); }
@@ -289,16 +353,43 @@ impl Propagator for Element {
                 let d = store.domain(c).to_vec();
                 for v in store.domain(self.y).to_vec() { if !d.contains(&v) { store.remove(self.y, v)?; } }
             }
+            return Ok(());
         }
+        
+        // y is fixed: which indices have array[idx] == y?
         if store.is_fixed(self.y) {
             let yv = store.value(self.y);
-            for c in self.array.clone() {
-                if store.is_fixed(c) {
-                    if store.value(c) != yv { store.remove(self.idx, c as i64)?; }
-                    else { store.commit(self.idx, c as i64)?; }
+            for (i, c) in self.array.iter().enumerate() {
+                if store.is_fixed(*c) {
+                    if store.value(*c) != yv { store.remove(self.idx, i as i64)?; }
+                    else { store.commit(self.idx, i as i64)?; }
                 }
             }
+            return Ok(());
         }
+        
+        // Both open: bounds-based index filtering
+        // Use y's bounds to prune indices where array[idx] cannot be in y's range
+        let y_bounds = store.bounds(self.y);
+        let idx_domain: Vec<i64> = store.domain(self.idx).to_vec();
+        
+        for &idx_val in &idx_domain {
+            if idx_val < 0 || idx_val as usize >= self.array.len() {
+                store.remove(self.idx, idx_val)?;
+                continue;
+            }
+            let arr_cell = self.array[idx_val as usize];
+            let arr_bounds = store.bounds(arr_cell);
+            
+            // If array[idx] cannot intersect with y's bounds, prune this index
+            // array[idx] ∈ [arr_bounds.min, arr_bounds.max]
+            // y ∈ [y_bounds.min, y_bounds.max]
+            // If no intersection, this index is invalid
+            if arr_bounds.max < y_bounds.min || arr_bounds.min > y_bounds.max {
+                store.remove(self.idx, idx_val)?;
+            }
+        }
+        
         Ok(())
     }
 }
