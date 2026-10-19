@@ -111,3 +111,54 @@ fn test_lelinear_bounds_tighten() {
     assert!(x_domain.len() <= 6, "x domain should not expand");
     assert!(y_domain.len() <= 5, "y domain should not expand");
 }
+
+// ============================================
+// weing7.dat MKP test (Phase B validation)
+// ============================================
+
+#[test]
+fn test_weing7_bounds_auto_conversion() {
+    // weing7.dat: m=2 knapsacks, n=105 items
+    // Large capacity domains should auto-convert to Bounds at threshold 1000
+    
+    let capacities = vec![41850, 38261];
+    let max_value = 1095445;
+    
+    // Create domains:
+    // - 6 binary item selections (simplified; weing7 has 105 but we test concept)
+    // - 2 large weight-sum accumulators [0, capacity[k]]
+    // - 1 large value accumulator [0, max_value]
+    
+    let mut domains: Vec<Vec<i64>> = vec![];
+    
+    // Binary item selections
+    for _ in 0..6 {
+        domains.push(vec![0, 1]);
+    }
+    
+    // Large weight-sum accumulators (above 1000 threshold)
+    // capacity[0] = 41850 > 1000 -> should convert to Bounds
+    domains.push((0..=capacities[0]).collect());
+    
+    // capacity[1] = 38261 > 1000 -> should convert to Bounds  
+    domains.push((0..=capacities[1]).collect());
+    
+    // Large value accumulator
+    // max_value = 1095445 > 1000 -> should convert to Bounds
+    domains.push((0..=max_value).collect());
+    
+    let store = Store::new(&domains);
+    
+    // Check auto-conversion
+    let weight_sum_0_is_bounds = store.is_bounds_domain(6);
+    let weight_sum_1_is_bounds = store.is_bounds_domain(7);
+    let value_is_bounds = store.is_bounds_domain(8);
+    
+    // Large domains (>1000) should be converted to Bounds
+    assert!(weight_sum_0_is_bounds, 
+        "weight_sum[0] domain [0, {}] should auto-convert to Bounds", capacities[0]);
+    assert!(weight_sum_1_is_bounds, 
+        "weight_sum[1] domain [0, {}] should auto-convert to Bounds", capacities[1]);
+    assert!(value_is_bounds, 
+        "value domain [0, {}] should auto-convert to Bounds", max_value);
+}
