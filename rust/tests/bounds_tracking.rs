@@ -11,14 +11,14 @@ fn test_bounds_initialized_from_domain() {
 #[test]
 fn test_tighten_bounds_valid() {
     let mut store = Store::new(&[vec![1, 2, 3, 4, 5]]);
-    store.tighten_bounds(0, Bounds::new(2, 4)).unwrap();
+    store.tighten_bounds_with_bounds(0, Bounds::new(2, 4)).unwrap();
     assert_eq!(store.bounds(0), Bounds::new(2, 4));
 }
 
 #[test]
 fn test_tighten_bounds_conflict() {
     let mut store = Store::new(&[vec![1, 2, 3, 4, 5]]);
-    let result = store.tighten_bounds(0, Bounds::new(10, 20));
+    let result = store.tighten_bounds_with_bounds(0, Bounds::new(10, 20));
     assert!(result.is_err());
 }
 

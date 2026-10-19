@@ -1,3 +1,6 @@
+/// Threshold for auto-converting large Vec domains to Bounds representation
+const BOUNDS_CONVERSION_THRESHOLD: usize = 1000;
+
 /// Bounds tracking for propagation reasoning (min/max per variable)
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bounds {
@@ -28,11 +31,11 @@ impl Bounds {
     }
 }
 
-/// Hybrid domain representation: Vec for small domains, BitSet for large ones
+/// Hybrid domain representation: Vec for small domains, Bounds for large ones
 #[derive(Debug, Clone, PartialEq)]
 pub enum Domain {
     Vec(std::vec::Vec<i64>),
-    // BitSet variant reserved for future optimization
+    Bounds(i64, i64),
 }
 
 impl Domain {
@@ -40,10 +43,53 @@ impl Domain {
     pub fn new(mut values: std::vec::Vec<i64>) -> Self {
         values.sort();
         values.dedup();
+        
+        // Auto-convert large domains to Bounds representation
+        if values.len() > BOUNDS_CONVERSION_THRESHOLD {
+            if let (Some(&min), Some(&max)) = (values.first(), values.last()) {
+                return Domain::Bounds(min, max);
+            }
+        }
+        
         Domain::Vec(values)
     }
 
+    /// Check if domain is fixed (single value)
+    pub fn is_fixed(&self) -> bool {
+        match self {
+            Domain::Vec(vec) => vec.len() == 1,
+            Domain::Bounds(min, max) => min == max,
+        }
+    }
+
+    /// Get the fixed value. Panics if not fixed.
+    pub fn value(&self) -> i64 {
+        match self {
+            Domain::Vec(vec) => {
+                assert_eq!(vec.len(), 1, "value() called on non-fixed Vec domain");
+                vec[0]
+            }
+            Domain::Bounds(min, max) => {
+                assert_eq!(min, max, "value() called on non-fixed Bounds domain");
+                *min
+            }
+        }
+    }
+
+    /// Get bounds of the domain
+    pub fn bounds(&self) -> Bounds {
+        match self {
+            Domain::Vec(vec) => {
+                let min = vec.first().copied().unwrap_or(0);
+                let max = vec.last().copied().unwrap_or(0);
+                Bounds::new(min, max)
+            }
+            Domain::Bounds(min, max) => Bounds::new(*min, *max),
+        }
+    }
+
     /// Remove a value from the domain. Returns true if value was present.
+    /// For Bounds, only boundary values can be removed.
     pub fn remove(&mut self, value: i64) -> bool {
         match self {
             Domain::Vec(ref mut vec) => {
@@ -56,6 +102,47 @@ impl Domain {
                     Err(_) => false,
                 }
             }
+            Domain::Bounds(ref mut min, ref mut max) => {
+                if value == *min && value < *max {
+                    *min += 1;
+                    true
+                } else if value == *max && value > *min {
+                    *max -= 1;
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    /// Tighten bounds to [new_min, new_max]. Returns Err(Conflict) if empty.
+    pub fn tighten_bounds(&mut self, new_min: i64, new_max: i64) -> Result<(), Conflict> {
+        if new_min > new_max {
+            return Err(Conflict);
+        }
+
+        match self {
+            Domain::Vec(ref mut vec) => {
+                // For Vec domains, remove all values outside [new_min, new_max]
+                vec.retain(|&v| v >= new_min && v <= new_max);
+                if vec.is_empty() {
+                    Err(Conflict)
+                } else {
+                    Ok(())
+                }
+            }
+            Domain::Bounds(ref mut min, ref mut max) => {
+                let new_bounds_min = new_min.max(*min);
+                let new_bounds_max = new_max.min(*max);
+                if new_bounds_min <= new_bounds_max {
+                    *min = new_bounds_min;
+                    *max = new_bounds_max;
+                    Ok(())
+                } else {
+                    Err(Conflict)
+                }
+            }
         }
     }
 
@@ -63,6 +150,7 @@ impl Domain {
     pub fn is_empty(&self) -> bool {
         match self {
             Domain::Vec(vec) => vec.is_empty(),
+            Domain::Bounds(min, max) => min > max,
         }
     }
 
@@ -70,6 +158,7 @@ impl Domain {
     pub fn len(&self) -> usize {
         match self {
             Domain::Vec(vec) => vec.len(),
+            Domain::Bounds(min, max) => ((max - min) + 1).max(0) as usize,
         }
     }
 
@@ -77,6 +166,7 @@ impl Domain {
     pub fn contains(&self, value: i64) -> bool {
         match self {
             Domain::Vec(vec) => vec.binary_search(&value).is_ok(),
+            Domain::Bounds(min, max) => value >= *min && value <= *max,
         }
     }
 
@@ -84,6 +174,11 @@ impl Domain {
     pub fn iter(&self) -> Box<dyn Iterator<Item = &i64> + '_> {
         match self {
             Domain::Vec(vec) => Box::new(vec.iter()),
+            Domain::Bounds(_min, _max) => {
+                // For Bounds, we can't return an iterator over all values
+                // This is by design - Bounds domains are for large ranges
+                Box::new(std::iter::empty())
+            }
         }
     }
 
@@ -91,6 +186,7 @@ impl Domain {
     pub fn min(&self) -> Option<i64> {
         match self {
             Domain::Vec(vec) => vec.first().copied(),
+            Domain::Bounds(min, max) => if min <= max { Some(*min) } else { None },
         }
     }
 
@@ -98,6 +194,7 @@ impl Domain {
     pub fn max(&self) -> Option<i64> {
         match self {
             Domain::Vec(vec) => vec.last().copied(),
+            Domain::Bounds(min, max) => if min <= max { Some(*max) } else { None },
         }
     }
 
@@ -105,8 +202,21 @@ impl Domain {
     pub fn to_vec(&self) -> std::vec::Vec<i64> {
         match self {
             Domain::Vec(vec) => vec.clone(),
+            Domain::Bounds(min, max) => {
+                if min <= max {
+                    (*min..=*max).collect()
+                } else {
+                    vec![]
+                }
+            }
         }
     }
+}
+
+#[derive(Clone, Debug)]
+enum TrailOp {
+    Remove(i64),           // Remove value from Vec domain
+    TightenBounds(Bounds), // Restore old bounds for a cell
 }
 
 #[derive(Debug, PartialEq)]
@@ -114,7 +224,7 @@ pub struct Conflict;
 
 pub struct Store {
     cells: std::vec::Vec<Domain>,
-    trail: std::vec::Vec<(usize, i64)>,
+    trail: std::vec::Vec<(usize, TrailOp)>,  // Unified trail: (cell, operation)
     mrv_cache: Option<usize>,
     mrv_cache_valid: bool,
     bounds: std::vec::Vec<Bounds>,
@@ -130,7 +240,11 @@ impl Store {
             if let Some(&min_val) = domain_vals.first() {
                 if let Some(&max_val) = domain_vals.last() {
                     bounds.push(Bounds::new(min_val, max_val));
+                } else {
+                    bounds.push(Bounds::new(0, 0)); // Empty domain
                 }
+            } else {
+                bounds.push(Bounds::new(0, 0)); // Empty domain
             }
         }
 
@@ -155,9 +269,7 @@ impl Store {
     }
 
     pub fn value(&self, cell: usize) -> i64 {
-        match &self.cells[cell] {
-            Domain::Vec(vec) => vec[0],
-        }
+        self.cells[cell].value()
     }
 
     pub fn first_open(&self) -> Option<usize> {
@@ -202,7 +314,7 @@ impl Store {
     pub fn remove(&mut self, cell: usize, value: i64) -> Result<(), Conflict> {
         let removed = self.cells[cell].remove(value);
         if removed {
-            self.trail.push((cell, value));
+            self.trail.push((cell, TrailOp::Remove(value)));
             self.changed_vars.insert(cell);  // Mark variable as changed
             self.invalidate_mrv_cache();
             if self.cells[cell].is_empty() {
@@ -230,10 +342,17 @@ impl Store {
 
     pub fn undo_to(&mut self, mark: usize) {
         let mut affected: std::collections::HashSet<usize> = std::collections::HashSet::new();
-        for (cell, value) in self.trail.drain(mark..).rev() {
-            if let Domain::Vec(ref mut vec) = &mut self.cells[cell] {
-                vec.push(value);
-                affected.insert(cell);
+        for (cell, op) in self.trail.drain(mark..).rev() {
+            match op {
+                TrailOp::Remove(value) => {
+                    if let Domain::Vec(ref mut vec) = &mut self.cells[cell] {
+                        vec.push(value);
+                        affected.insert(cell);
+                    }
+                }
+                TrailOp::TightenBounds(old_bounds) => {
+                    self.bounds[cell] = old_bounds;
+                }
             }
         }
         // Sort once per affected cell instead of after every pushed value.
@@ -242,6 +361,7 @@ impl Store {
                 vec.sort();
             }
         }
+        
         // Clear changed_vars when undoing to avoid stale state
         self.changed_vars.clear();
         self.invalidate_mrv_cache();
@@ -255,6 +375,44 @@ impl Store {
         self.cells.iter().filter(|d| d.len() > 1).count()
     }
 
+    /// Check if a domain is represented as Bounds
+    pub fn is_bounds_domain(&self, cell: usize) -> bool {
+        matches!(&self.cells[cell], Domain::Bounds(_, _))
+    }
+
+    /// Check if a domain is represented as Vec
+    pub fn is_vec_domain(&self, cell: usize) -> bool {
+        matches!(&self.cells[cell], Domain::Vec(_))
+    }
+
+    /// Get domain as Vec, or None if it's a Bounds domain
+    pub fn domain_or_none(&self, cell: usize) -> Option<std::vec::Vec<i64>> {
+        match &self.cells[cell] {
+            Domain::Vec(vec) => Some(vec.clone()),
+            Domain::Bounds(_, _) => None,
+        }
+    }
+
+    /// Tighten domain bounds and record to trail (new_min, new_max version)
+    pub fn tighten_bounds(&mut self, cell: usize, new_min: i64, new_max: i64) -> Result<(), Conflict> {
+        // Record old state to trail for undo
+        let old_bounds = self.bounds[cell];
+        self.trail.push((cell, TrailOp::TightenBounds(old_bounds)));
+        
+        // Tighten the domain itself
+        self.cells[cell].tighten_bounds(new_min, new_max)?;
+        
+        // Also tighten the bounds field
+        let new_bounds = Bounds::new(new_min, new_max);
+        if let Some(tightened) = old_bounds.intersect(&new_bounds) {
+            self.bounds[cell] = tightened;
+            self.invalidate_mrv_cache();
+            Ok(())
+        } else {
+            Err(Conflict)
+        }
+    }
+
     pub fn bounds(&self, cell: usize) -> Bounds {
         self.bounds[cell]
     }
@@ -265,15 +423,9 @@ impl Store {
         Ok(())
     }
 
-    pub fn tighten_bounds(&mut self, cell: usize, new_bounds: Bounds) -> Result<(), Conflict> {
-        let current = self.bounds[cell];
-        if let Some(tightened) = current.intersect(&new_bounds) {
-            self.bounds[cell] = tightened;
-            self.invalidate_mrv_cache();
-            Ok(())
-        } else {
-            Err(Conflict)
-        }
+    /// Tighten bounds with a Bounds object (delegates to the new version)
+    pub fn tighten_bounds_with_bounds(&mut self, cell: usize, new_bounds: Bounds) -> Result<(), Conflict> {
+        self.tighten_bounds(cell, new_bounds.min, new_bounds.max)
     }
 
     pub fn get_changed_vars(&self) -> std::vec::Vec<usize> {

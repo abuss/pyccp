@@ -343,7 +343,7 @@ impl Propagator for LessThan {
         // Tighten left variable: i < j means i <= j.max - 1
         let new_left_max = right_bounds.max - 1;
         if new_left_max < left_bounds.max {
-            store.tighten_bounds(i, crate::store::Bounds::new(left_bounds.min, new_left_max))?;
+            store.tighten_bounds_with_bounds(i, crate::store::Bounds::new(left_bounds.min, new_left_max))?;
             // Prune domain values outside tightened bounds
             for v in store.domain(i).to_vec() {
                 if v > new_left_max { store.remove(i, v)?; }
@@ -353,7 +353,7 @@ impl Propagator for LessThan {
         // Tighten right variable: i < j means j >= i.min + 1
         let new_right_min = left_bounds.min + 1;
         if new_right_min > right_bounds.min {
-            store.tighten_bounds(j, crate::store::Bounds::new(new_right_min, right_bounds.max))?;
+            store.tighten_bounds_with_bounds(j, crate::store::Bounds::new(new_right_min, right_bounds.max))?;
             // Prune domain values outside tightened bounds
             for v in store.domain(j).to_vec() {
                 if v < new_right_min { store.remove(j, v)?; }
