@@ -9,9 +9,6 @@ def test_mknapsack_threshold_converts_pb4_to_bounds():
     Simulates pb4.dat structure: m=29 items, capacity ~55000.
     The capacity domain (0..55000) exceeds the BOUNDS_CONVERSION_THRESHOLD of 1000,
     triggering auto-conversion to Bounds representation.
-    
-    Note: This test verifies the Store is created successfully with large domains.
-    The actual Bounds representation check happens internally in the Rust solver.
     """
     # Simulate pb4 structure: 29 items, 1 knapsack (simplified)
     m_items = 29
@@ -27,14 +24,18 @@ def test_mknapsack_threshold_converts_pb4_to_bounds():
     # Combine domains
     domains = item_domains + capacity_domain
     
-    # Create store - this will auto-convert large domains to Bounds internally
+    # Create store
     store = pyccp.Store(domains)
     
-    # Verify store was created successfully (large domain conversion happened internally)
-    assert store is not None, "Store should be created successfully with large domains"
+    # Verify the capacity cell (at index m_items) uses Bounds representation
+    capacity_cell = m_items
+    assert store.is_bounds_domain(capacity_cell), \
+        f"Capacity domain with {capacity_value} values should auto-convert to Bounds"
     
-    # The Store should handle the large domain without issue
-    # (Bounds optimization is transparent to the API)
+    # All item domains should remain as Vec (only 2 values each)
+    for i in range(m_items):
+        assert not store.is_bounds_domain(i), \
+            f"Item domain {i} should remain as Vec (only 2 values)"
 
 
 def test_mknapsack_bounds_correctness():
@@ -57,17 +58,10 @@ def test_mknapsack_bounds_correctness():
     sum_cell = m
     value_cell = m + n
     
-    # Compute possible sums via subset sum (ponytail style)
-    def subset_sums(coeffs):
-        sums = {0}
-        for c in coeffs:
-            sums |= {s + c for s in sums}
-        return sorted(sums)
-    
     domains = (
         [[0, 1] for _ in range(m)] +
-        [subset_sums(weights[0])] +  # sum domain: all possible sums
-        [subset_sums(values)]  # value domain: all possible values
+        [list(range(capacity + 2))] +  # sum domain: 0 to capacity+1
+        [list(range(max(values) * m + 2))]  # value domain: 0 to max possible
     )
     
     store = pyccp.Store(domains)

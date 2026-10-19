@@ -40,6 +40,18 @@ impl Domain {
     pub fn new(mut values: std::vec::Vec<i64>) -> Self {
         values.sort();
         values.dedup();
+        
+        // Auto-convert to Bounds for large contiguous domains (>1000 values)
+        const BOUNDS_CONVERSION_THRESHOLD: usize = 1000;
+        if values.len() > BOUNDS_CONVERSION_THRESHOLD {
+            if let (Some(&min_val), Some(&max_val)) = (values.first(), values.last()) {
+                // Check if domain is contiguous (all integers in range are present)
+                if (max_val - min_val + 1) as usize == values.len() {
+                    return Domain::Bounds(min_val, max_val);
+                }
+            }
+        }
+        
         Domain::Vec(values)
     }
 
