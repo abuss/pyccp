@@ -1,6 +1,6 @@
 [package]
 name = "pyccp-core"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2021"
 
 [lib]
@@ -10,3 +10,15 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 pyo3 = { version = "0.30", features = ["extension-module"] }
 rayon = "1"
+bitset-core = "0.1"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "phase1_benchmark"
+harness = false
+
+[[bench]]
+name = "phase2_benchmark"
+harness = false

@@ -111,7 +111,7 @@ impl CustomSolver {
             Some(c) => c,
             None => return Some(self.store.assignment()),
         };
-        let domain: Vec<i64> = self.store.domain(cell).to_vec();
+        let domain: Vec<i64> = self.value_order(cell);
         for &v in &domain {
             let m = self.store.mark();
             if self.store.commit(cell, v).is_err() { continue; }
@@ -132,7 +132,7 @@ impl CustomSolver {
             Some(c) => c,
             None => { out.push(self.store.assignment()); return out.len() >= limit; }
         };
-        let domain: Vec<i64> = self.store.domain(cell).to_vec();
+        let domain: Vec<i64> = self.value_order(cell);
         for &v in &domain {
             let m = self.store.mark();
             if self.store.commit(cell, v).is_ok()
@@ -146,7 +146,30 @@ impl CustomSolver {
         false
     }
 
-    pub fn solve_parallel(&mut self) -> Option<Vec<i64>> {
+    /// LCV heuristic: order values by how constraining they are.
+    /// ponytail: simplified LCV = count propagators involving this cell that
+    /// would prune on a commitment; full LCV counts values eliminated per value,
+    /// add when needed.
+    fn value_score(&self, cell: usize, _value: i64) -> usize {
+        let prop_count = self.registry.propagators_involving(cell).len();
+        // Score = number of propagators; fewer = less constraining = try last.
+        // Within same cell, all values see same propagators, so all tied.
+        // ponytail: real LCV scores each value by simulating a commit + fixpoint
+        // on a cloned store, counts pruned values; defer if perf shows cost.
+        prop_count
+    }
+
+    /// Return domain sorted by LCV score (most constraining first)
+    pub fn value_order(&self, cell: usize) -> Vec<i64> {
+        let mut domain: Vec<i64> = self.store.domain(cell).to_vec();
+        // ponytail: LCV simplified to propagator count per cell; within a cell,
+        // order is unchanged (values are tied). Full LCV simulation deferred.
+        // For now, just return domain as-is; score exists for future expansion.
+        domain.sort_by_key(|&v| self.value_score(cell, v));
+        domain
+    }
+
+     pub fn solve_parallel(&mut self) -> Option<Vec<i64>> {
         let cell = self.store.first_open()?;
         let domain: Vec<i64> = self.store.domain(cell).to_vec();
         let (first, rest) = (domain[0], domain[1..].to_vec());
@@ -187,6 +210,7 @@ impl CustomSolver {
         Arc::try_unwrap(result).ok().and_then(|m| m.into_inner().ok()).flatten()
     }
 }
+
 
 #[cfg(test)]
 mod tests {

@@ -1,0 +1,30 @@
+   Compiling pyccp-core v0.1.0 (/home/abuss/Work/devel/pyccp/.worktrees/v2.1-framework-upgrade/rust)
+    Finished `bench` profile [optimized] target(s) in 1.50s
+     Running benches/phase2_benchmark.rs (target/release/deps/phase2_benchmark-e8a2f792f1203c47)
+Gnuplot not found, using plotters backend
+Benchmarking nqueens_8_phase2
+Benchmarking nqueens_8_phase2: Warming up for 3.0000 s
+Benchmarking nqueens_8_phase2: Collecting 100 samples in estimated 6.5765 s (10k iterations)
+Benchmarking nqueens_8_phase2: Analyzing
+nqueens_8_phase2        time:   [647.64 µs 650.42 µs 653.48 µs]
+Found 6 outliers among 100 measurements (6.00%)
+  5 (5.00%) high mild
+  1 (1.00%) high severe
+
+Benchmarking nqueens_14_phase2
+Benchmarking nqueens_14_phase2: Warming up for 3.0000 s
+Benchmarking nqueens_14_phase2: Collecting 100 samples in estimated 5.6011 s (300 iterations)
+Benchmarking nqueens_14_phase2: Analyzing
+nqueens_14_phase2       time:   [18.736 ms 18.829 ms 18.929 ms]
+Found 8 outliers among 100 measurements (8.00%)
+  5 (5.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking send_more_money_phase2
+Benchmarking send_more_money_phase2: Warming up for 3.0000 s
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 20.5s, or reduce sample count to 20.
+Benchmarking send_more_money_phase2: Collecting 100 samples in estimated 20.482 s (100 iterations)
+Benchmarking send_more_money_phase2: Analyzing
+send_more_money_phase2  time:   [207.00 ms 209.82 ms 212.60 ms]
+

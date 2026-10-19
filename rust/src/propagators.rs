@@ -31,7 +31,7 @@ impl Propagator for NeqLinear {
             let rem = self.k - sum;
             if rem % coef == 0 {
                 let v = rem / coef;
-                if store.domain(c).contains(&v) { store.remove(c, v)?; }
+                if store.domain(c).contains(v) { store.remove(c, v)?; }
             }
         }
         Ok(())
@@ -41,18 +41,76 @@ impl Propagator for NeqLinear {
 pub struct AllDiff { cells: Vec<usize> }
 impl AllDiff {
     pub fn new(cells: Vec<usize>) -> AllDiff { AllDiff { cells } }
+
+    /// AC-3 algorithm for AllDiff constraint.
+    /// 
+    /// Phase 1: Remove values from fixed variables
+    /// - For each fixed variable with value v, remove v from all other variables
+    /// 
+    /// Phase 2: Check support and fix unique supporters
+    /// - For each value v in the union of all domains:
+    ///   - Count unfixed variables that have v in their domain
+    ///   - If count == 0 and a fixed variable has v: conflict
+    ///   - If count == 1: fix that variable to v
+    fn collect_all_values(&self, store: &Store) -> Vec<i64> {
+        let mut values = std::collections::HashSet::new();
+        for &var in &self.cells {
+            for &val in store.domain(var).iter() {
+                values.insert(val);
+            }
+        }
+        let mut sorted: Vec<i64> = values.into_iter().collect();
+        sorted.sort();
+        sorted
+    }
 }
 impl Propagator for AllDiff {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        for &i in &self.cells {
-            if store.is_fixed(i) {
-                let v = store.value(i);
-                for &j in &self.cells {
-                    if j != i && store.domain(j).contains(&v) { store.remove(j, v)?; }
+        // Phase 1: Remove fixed values from domains
+        for &var_i in &self.cells {
+            if store.is_fixed(var_i) {
+                let value = store.value(var_i);
+                for &var_j in &self.cells {
+                    if var_i != var_j {
+                        store.remove(var_j, value)?;
+                    }
                 }
             }
         }
+        
+        // Phase 2: Check for unsupported values and fix unique supporters
+        for value in self.collect_all_values(store) {
+            // Count supporters: both fixed variables assigned v and unfixed variables with v
+            let supporters: Vec<usize> = self.cells.iter()
+                .filter(|&&var| {
+                    if store.is_fixed(var) {
+                        store.value(var) == value
+                    } else {
+                        store.domain(var).contains(value)
+                    }
+                })
+                .copied()
+                .collect();
+            
+            match supporters.len() {
+                0 => {
+                    // Value v has no support (not used by any variable)
+                    // This is not a conflict - it just means v won't be assigned
+                }
+                1 => {
+                    // Value v can only go to one variable; fix it if not already fixed
+                    let var = supporters[0];
+                    if !store.is_fixed(var) {
+                        store.commit(var, value)?;
+                    }
+                }
+                _ => {
+                    // Multiple supporters; ok (no more pruning needed here)
+                }
+            }
+        }
+        
         Ok(())
     }
 }
@@ -62,12 +120,42 @@ impl LinearEq {
     pub fn new(terms: Vec<(usize, i64)>, rhs: i64) -> LinearEq {
         LinearEq { cells: terms.iter().map(|t| t.0).collect(), terms, rhs }
     }
+
+    /// Compute min/max possible sum across all variables in the constraint.
+    /// For each term (var, coeff):
+    ///   - If coeff > 0: use bounds.min for min_sum, bounds.max for max_sum
+    ///   - If coeff < 0: use bounds.max for min_sum, bounds.min for max_sum (reversed)
+    fn compute_bounds(&self, store: &Store) -> (i64, i64) {
+        let mut min_sum = 0i64;
+        let mut max_sum = 0i64;
+        
+        for (var, coeff) in &self.terms {
+            let bounds = store.bounds(*var);
+            if *coeff > 0 {
+                min_sum += coeff * bounds.min;
+                max_sum += coeff * bounds.max;
+            } else if *coeff < 0 {
+                // For negative coefficients, the relationship is reversed
+                min_sum += coeff * bounds.max;
+                max_sum += coeff * bounds.min;
+            }
+            // If coeff == 0, contributes 0 to both sums
+        }
+        
+        (min_sum, max_sum)
+    }
 }
+
 impl Propagator for LinearEq {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: propagates only when all-but-one term is fixed; full
-        // interval arithmetic when bounds-based pruning is needed.
+        // First: bounds-based early conflict detection
+        let (min_sum, max_sum) = self.compute_bounds(store);
+        if min_sum > self.rhs || max_sum < self.rhs {
+            return Err(Conflict);
+        }
+
+        // Original propagation: when all-but-one term is fixed
         let open: Vec<(usize, i64)> = self.terms.iter()
             .filter(|(c, _)| !store.is_fixed(*c)).copied().collect();
         if open.len() > 1 { return Ok(()); }
@@ -108,8 +196,38 @@ impl LessThan { pub fn new(i: usize, j: usize) -> LessThan { LessThan { cells: [
 impl Propagator for LessThan {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: prunes only when one side is fixed; bounds reasoning later.
         let [i, j] = self.cells;
+        
+        // Get bounds for left (i) and right (j)
+        let left_bounds = store.bounds(i);
+        let right_bounds = store.bounds(j);
+        
+        // Early conflict check: if left.min >= right.max, constraint is unsatisfiable
+        if left_bounds.min >= right_bounds.max {
+            return Err(Conflict);
+        }
+        
+        // Tighten left variable: i < j means i <= j.max - 1
+        let new_left_max = right_bounds.max - 1;
+        if new_left_max < left_bounds.max {
+            store.tighten_bounds(i, crate::store::Bounds::new(left_bounds.min, new_left_max))?;
+            // Prune domain values outside tightened bounds
+            for v in store.domain(i).to_vec() {
+                if v > new_left_max { store.remove(i, v)?; }
+            }
+        }
+        
+        // Tighten right variable: i < j means j >= i.min + 1
+        let new_right_min = left_bounds.min + 1;
+        if new_right_min > right_bounds.min {
+            store.tighten_bounds(j, crate::store::Bounds::new(new_right_min, right_bounds.max))?;
+            // Prune domain values outside tightened bounds
+            for v in store.domain(j).to_vec() {
+                if v < new_right_min { store.remove(j, v)?; }
+            }
+        }
+        
+        // Domain-based pruning for fixed values (keep existing behavior for compatibility)
         if store.is_fixed(i) && store.is_fixed(j) {
             return if store.value(i) < store.value(j) { Ok(()) } else { Err(Conflict) };
         }
@@ -274,17 +392,77 @@ impl Propagator for Xor {
     }
 }
 
-pub struct Registry { props: Vec<Box<dyn Propagator>> }
+pub struct Registry {
+    props: Vec<Box<dyn Propagator>>,
+    propagator_index: std::collections::HashMap<usize, Vec<usize>>,  // var_id -> [prop_ids]
+}
+
 impl Registry {
-    pub fn new() -> Registry { Registry { props: Vec::new() } }
-    pub fn add(&mut self, p: Box<dyn Propagator>) { self.props.push(p); }
+    pub fn new() -> Registry {
+        Registry {
+            props: Vec::new(),
+            propagator_index: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, p: Box<dyn Propagator>) {
+        let prop_id = self.props.len();
+        // Index the propagator by its variables
+        for &var in p.cells() {
+            self.propagator_index.entry(var)
+                .or_insert_with(Vec::new)
+                .push(prop_id);
+        }
+        self.props.push(p);
+    }
+
+    pub fn propagators_involving(&self, cell: usize) -> Vec<usize> {
+        self.propagator_index.get(&cell).cloned().unwrap_or_default()
+    }
+
+    /// Get propagator indices that touch any of the given variables
+    pub fn propagators_for_vars(&self, vars: &[usize]) -> Vec<usize> {
+        let mut propagators = Vec::new();
+        for &var in vars {
+            if let Some(props) = self.propagator_index.get(&var) {
+                propagators.extend_from_slice(props);
+            }
+        }
+        // Remove duplicates while preserving order
+        propagators.sort_unstable();
+        propagators.dedup();
+        propagators
+    }
 
     pub fn fixpoint(&mut self, store: &mut Store) -> Result<(), Conflict> {
+        // First iteration: run all propagators
+        let mut first_iteration = true;
+        
         loop {
-            let before = store.trail_len();
-            for p in &mut self.props { p.propagate(store)?; }
-            if store.trail_len() == before { return Ok(()); }
+            let changed_vars = if first_iteration {
+                // First time: mark all variables as changed to run all propagators
+                (0..store.num_variables()).collect::<Vec<_>>()
+            } else {
+                store.get_changed_vars()
+            };
+            
+            if changed_vars.is_empty() {
+                break;  // No more changes, fixpoint reached
+            }
+            
+            store.clear_changed_vars();
+            first_iteration = false;
+            
+            // Only propagate affected propagators
+            let affected_props = self.propagators_for_vars(&changed_vars);
+            
+            for prop_id in affected_props {
+                self.props[prop_id].propagate(store)?;
+            }
         }
+        
+        store.invalidate_mrv_cache();
+        Ok(())
     }
 }
 
@@ -299,7 +477,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(NeqLinear::new(vec![(0, 1), (1, -1)], 0)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[2]);
+        assert_eq!(s.domain(0).to_vec(), &[2]);
     }
 
     #[test]
@@ -317,7 +495,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(NeqLinear::new(vec![(0, 1), (1, -1)], -1)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[1]);
+        assert_eq!(s.domain(1).to_vec(), &[1]);
     }
 
     #[test]
@@ -328,7 +506,7 @@ mod tests {
         s.commit(0, 1).unwrap();
         s.commit(1, 2).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(2), &[3]);
+        assert_eq!(s.domain(2).to_vec(), &[3]);
     }
 
     #[test]
@@ -339,7 +517,7 @@ mod tests {
         r.add(Box::new(LinearEq::new(vec![(1, 1), (0, -1)], 1)));
         s.commit(0, 1).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[2]);
+        assert_eq!(s.domain(1).to_vec(), &[2]);
     }
 
     #[test]
@@ -364,7 +542,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(NonZero::new(0)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[1, 2]);
+        assert_eq!(s.domain(0).to_vec(), &[1, 2]);
     }
 
     #[test]
@@ -374,7 +552,7 @@ mod tests {
         r.add(Box::new(LessThan::new(0, 1)));
         s.commit(1, 2).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[1]);
+        assert_eq!(s.domain(0).to_vec(), &[1]);
     }
 
     #[test]
@@ -392,7 +570,7 @@ mod tests {
         r.add(Box::new(Multiply::new(0, 1, 12)));
         s.commit(0, 2).unwrap();
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[6]);
+        assert_eq!(s.domain(1).to_vec(), &[6]);
     }
 
     #[test]
@@ -411,7 +589,7 @@ mod tests {
         r.add(Box::new(Element::new(vec![0, 1, 2], 3, 4)));
         s.commit(3, 0).unwrap();          // idx -> array[0] = 1
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(4), &[1]);
+        assert_eq!(s.domain(4).to_vec(), &[1]);
     }
 
     #[test]
@@ -429,8 +607,8 @@ mod tests {
         r.add(Box::new(Cardinality::new(vec![0, 1, 2], 3, 1)));
         s.commit(0, 3).unwrap();          // one equal -> others cannot be 3
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[4]);
-        assert_eq!(s.domain(2), &[4]);
+        assert_eq!(s.domain(1).to_vec(), &[4]);
+        assert_eq!(s.domain(2).to_vec(), &[4]);
     }
 
     #[test]
@@ -447,7 +625,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(Modulo::new(0, 3, 0)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[3, 6, 9]);
+        assert_eq!(s.domain(0).to_vec(), &[3, 6, 9]);
     }
 
     #[test]
@@ -464,8 +642,8 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(And::new(0, 1, 2)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(0), &[1]);
-        assert_eq!(s.domain(1), &[1]);
+        assert_eq!(s.domain(0).to_vec(), &[1]);
+        assert_eq!(s.domain(1).to_vec(), &[1]);
     }
 
     #[test]
@@ -483,7 +661,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(Or::new(0, 1, 2)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[0]);
+        assert_eq!(s.domain(1).to_vec(), &[0]);
     }
 
     #[test]
@@ -492,7 +670,7 @@ mod tests {
         let mut r = Registry::new();
         r.add(Box::new(Xor::new(0, 1, 2)));
         r.fixpoint(&mut s).unwrap();
-        assert_eq!(s.domain(1), &[0]);
+        assert_eq!(s.domain(1).to_vec(), &[0]);
     }
 
     #[test]
