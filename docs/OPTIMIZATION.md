@@ -64,6 +64,76 @@ for tour in sols:
 print(f"Optimal tour: {best_tour}, cost: {best_cost}")
 ```
 
+## Example: Knapsack (0/1 Knapsack Problem)
+
+Pack items into a knapsack of limited capacity to maximize total value.
+
+```python
+from pyccp import Store
+
+# Items: (value, weight)
+items = [
+    (10, 5),   # item 0
+    (8, 4),    # item 1
+    (7, 3),    # item 2
+    (6, 2),    # item 3
+    (5, 1),    # item 4
+]
+n = len(items)
+capacity = 12
+
+# Variables: selected[i] in {0, 1} — item i included or not
+s = Store([[0, 1] for _ in range(n)])
+
+# Enumerate all 2^n combinations
+sols = s.solve_all(limit=2**n)
+
+# Find maximum value under capacity constraint
+best_val = 0
+best_sel = None
+for sol in sols:
+    total_weight = sum(sol[i] * items[i][1] for i in range(n))
+    if total_weight <= capacity:
+        total_value = sum(sol[i] * items[i][0] for i in range(n))
+        if total_value > best_val:
+            best_val = total_value
+            best_sel = sol
+
+print(f"Selected items: {best_sel}, value: {best_val}")
+```
+
+## Example: Scheduling (Job Scheduling)
+
+Assign jobs to machines to minimize makespan (total completion time).
+
+```python
+from pyccp import Store
+
+job_durations = [5, 3, 4, 6, 2, 7, 3, 1]  # 8 jobs
+n_jobs = len(job_durations)
+n_machines = 3
+
+# Variables: machine[i] in 0..n_machines-1 — job i assigned to which machine
+s = Store([list(range(n_machines)) for _ in range(n_jobs)])
+
+# Enumerate all possible assignments
+sols = s.solve_all(limit=3**n_jobs)
+
+# Find assignment with minimum makespan
+best_makespan = float('inf')
+best_assign = None
+for sol in sols:
+    machine_times = [0] * n_machines
+    for job_idx, machine_idx in enumerate(sol):
+        machine_times[machine_idx] += job_durations[job_idx]
+    makespan = max(machine_times)
+    if makespan < best_makespan:
+        best_makespan = makespan
+        best_assign = sol
+
+print(f"Job assignment: {best_assign}, makespan: {best_makespan}")
+```
+
 ## Limitations
 
 - **Single objective only**: Multi-objective optimization is not supported.
