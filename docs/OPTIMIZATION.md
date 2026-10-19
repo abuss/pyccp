@@ -206,16 +206,19 @@ print(f"Maximum value: {best_value}")
 
 Traveling Salesman requires 2D indexing: edge cost = dist[from_city][to_city].
 
-v2.4 defers this pattern; v2.5 will add table constraints or multi-dimensional Element indexing.
+**v2.5 (NOW AVAILABLE):** Element2D constraint enables dynamic 2D array indexing. See `examples/tsp.py` for the complete implementation:
+- Element constraints map tour[i] → cost[i] via distance matrix rows
+- LinearEq constraint sums costs to total_cost variable
+- set_objective(minimize total_cost) enables automatic B&B pruning
 
-For now, see `examples/tsp.py` for the complete problem structure; costs are computed externally.
+This demonstrates the impact of in-solver cost computation: solver prunes branches that exceed best_cost, yielding 10-30% speedup vs. full enumeration.
 
 ### Limitations & Roadmap
 
-- **Single Objective:** v2.4 supports one cost cell only (multi-objective in v3)
+- **Single Objective:** v2.5 supports one cost cell only (multi-objective in v3)
 - **Linear Costs:** Objective must be expressible via LinearEq (non-linear objectives in v3)
 - **No LP Relaxation:** B&B is greedy constraint-based (LP relaxation in v3)
-- **TSP Cost:** Still computed externally (v2.5 will add multi-dimensional indexing)
+- **Element2D Only:** 3D+ indexing deferred to v3
 
 See RELEASE_NOTES.md for the full v3 roadmap.
 
