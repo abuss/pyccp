@@ -1,4 +1,4 @@
-use pyccp_core::propagators::{LinearEq, LessThan, NeqLinear, Multiply, Registry};
+use pyccp_core::propagators::{LinearEq, LessThan, NeqLinear, Multiply, Element, Registry};
 use pyccp_core::store::{Store, Conflict};
 
 /// Test bounds conflict detection: x + y = 100, x ∈ [0,5], y ∈ [0,5]
@@ -224,3 +224,82 @@ fn test_multiply_bounds_zero_constraint() {
     assert!(s.domain(1).contains(0), "y should contain 0");
 }
 
+/// Test Element bounds filtering: y = array[idx]
+/// array = [5, 15, 25], idx ∈ [0,2], y ∈ [10,20]
+/// array[0] = 5 ∉ [10,20] → prune idx = 0
+/// array[1] = 15 ∈ [10,20] → keep idx = 1
+/// array[2] = 25 ∉ [10,20] → prune idx = 2
+/// Result: idx = 1
+#[test]
+fn test_element_bounds_prunes_idx() {
+    // Fixed array: cells [6,7,8] represent array elements (fixed to 5,15,25)
+    // idx = 9 (can be 0,1,2)
+    // y = 10 (can be 10-20)
+    let mut s = Store::new(&[
+        vec![5],         // array[0] fixed to 5
+        vec![15],        // array[1] fixed to 15
+        vec![25],        // array[2] fixed to 25
+        vec![0, 1, 2],   // idx can be 0, 1, or 2
+        vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], // y ∈ [10,20]
+    ]);
+    let mut r = Registry::new();
+    r.add(Box::new(Element::new(vec![0, 1, 2], 3, 4)));
+    
+    // Run propagation to fixpoint
+    r.fixpoint(&mut s).unwrap();
+    
+    // idx should be pruned to [1] (only array[1]=15 intersects with y ∈ [10,20])
+    assert_eq!(s.domain(3).to_vec(), vec![1], "idx should be pruned to [1]");
+}
+
+/// Test Element bounds filtering: y = array[idx]
+/// array cells ∈ [1,10], idx ∈ [0,2], y ∈ [5,8]
+/// All indices have potential values in [1,10], y needs [5,8]
+/// Index filtering keeps indices where array value could be in [5,8]
+/// Note: Current Element impl only prunes idx/y when one is fixed;
+/// bounds-based bidirectional pruning is future work
+#[test]
+fn test_element_bounds_multiple_valid_indices() {
+    let mut s = Store::new(&[
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],   // array[0]
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],   // array[1]
+        vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],   // array[2]
+        vec![0, 1, 2],                          // idx
+        vec![5, 6, 7, 8],                       // y ∈ [5,8]
+    ]);
+    let mut r = Registry::new();
+    r.add(Box::new(Element::new(vec![0, 1, 2], 3, 4)));
+    
+    // Run propagation to fixpoint
+    r.fixpoint(&mut s).unwrap();
+    
+    // All indices are valid (all array cells have bounds [1,10] which intersect [5,8])
+    assert_eq!(s.domain(3).to_vec(), vec![0, 1, 2], "All indices should be valid");
+    
+    // array cells are not pruned when both idx and y are open (not yet implemented)
+    // This is where v2.3 bidirectional pruning would apply
+    for arr_idx in 0..3 {
+        let arr_len = s.domain(arr_idx).len();
+        assert_eq!(arr_len, 10, "array[{}] not pruned (both idx and y open)", arr_idx);
+    }
+}
+
+/// Test Element bounds filtering: y = array[idx]
+/// array cells ∈ [1,3], idx ∈ [0,2], y ∈ [10,20]
+/// No array value can be in [10,20], so no valid index
+#[test]
+fn test_element_bounds_no_intersection() {
+    let mut s = Store::new(&[
+        vec![1, 2, 3],     // array[0]
+        vec![1, 2, 3],     // array[1]
+        vec![1, 2, 3],     // array[2]
+        vec![0, 1, 2],     // idx
+        vec![10, 11, 12], // y ∈ [10,12], no intersection with [1,3]
+    ]);
+    let mut r = Registry::new();
+    r.add(Box::new(Element::new(vec![0, 1, 2], 3, 4)));
+    
+    // Run propagation to fixpoint
+    // No valid indices (no array value intersects with y bounds)
+    assert_eq!(r.fixpoint(&mut s), Err(Conflict), "Should detect conflict: no valid indices");
+}

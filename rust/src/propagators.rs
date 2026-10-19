@@ -342,8 +342,7 @@ impl Element {
 impl Propagator for Element {
     fn cells(&self) -> &[usize] { &self.cells }
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
-        // ponytail: prunes only when idx or y is fixed; full bidirectional
-        // domain intersection when needed.
+        // idx is fixed: y = array[idx]
         if store.is_fixed(self.idx) {
             let idx = store.value(self.idx);
             if idx < 0 || idx as usize >= self.array.len() { return Err(Conflict); }
@@ -354,16 +353,43 @@ impl Propagator for Element {
                 let d = store.domain(c).to_vec();
                 for v in store.domain(self.y).to_vec() { if !d.contains(&v) { store.remove(self.y, v)?; } }
             }
+            return Ok(());
         }
+        
+        // y is fixed: which indices have array[idx] == y?
         if store.is_fixed(self.y) {
             let yv = store.value(self.y);
-            for c in self.array.clone() {
-                if store.is_fixed(c) {
-                    if store.value(c) != yv { store.remove(self.idx, c as i64)?; }
-                    else { store.commit(self.idx, c as i64)?; }
+            for (i, c) in self.array.iter().enumerate() {
+                if store.is_fixed(*c) {
+                    if store.value(*c) != yv { store.remove(self.idx, i as i64)?; }
+                    else { store.commit(self.idx, i as i64)?; }
                 }
             }
+            return Ok(());
         }
+        
+        // Both open: bounds-based index filtering
+        // Use y's bounds to prune indices where array[idx] cannot be in y's range
+        let y_bounds = store.bounds(self.y);
+        let idx_domain: Vec<i64> = store.domain(self.idx).to_vec();
+        
+        for &idx_val in &idx_domain {
+            if idx_val < 0 || idx_val as usize >= self.array.len() {
+                store.remove(self.idx, idx_val)?;
+                continue;
+            }
+            let arr_cell = self.array[idx_val as usize];
+            let arr_bounds = store.bounds(arr_cell);
+            
+            // If array[idx] cannot intersect with y's bounds, prune this index
+            // array[idx] ∈ [arr_bounds.min, arr_bounds.max]
+            // y ∈ [y_bounds.min, y_bounds.max]
+            // If no intersection, this index is invalid
+            if arr_bounds.max < y_bounds.min || arr_bounds.min > y_bounds.max {
+                store.remove(self.idx, idx_val)?;
+            }
+        }
+        
         Ok(())
     }
 }
