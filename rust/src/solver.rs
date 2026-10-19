@@ -87,7 +87,9 @@ impl Solver for CustomSolver {
     }
 
     fn solve(&mut self) -> Option<Vec<i64>> {
-        self.dfs()
+        let mut out = Vec::with_capacity(1);
+        self.collect(&mut out, 1);  // Find first (optimal if objective set)
+        out.into_iter().next()
     }
 
     fn solve_all(&mut self, limit: usize) -> Vec<Vec<i64>> {
@@ -140,20 +142,57 @@ impl CustomSolver {
     }
 
     // Returns true when the limit is reached and the search must unwind.
+    // Returns true when the limit is reached and the search must unwind.
     fn collect(&mut self, out: &mut Vec<Vec<i64>>, limit: usize) -> bool {
         if out.len() >= limit { return true; }
         let cell = match self.store.first_open() {
             Some(c) => c,
-            None => { out.push(self.store.assignment()); return out.len() >= limit; }
+            None => {
+                let solution = self.store.assignment();
+                // Update best_cost if objective is set
+                if let Some((cost_cell, is_minimize)) = self.store.objective {
+                    let cost = solution[cost_cell];
+                    let should_update = match self.store.best_cost {
+                        None => true,
+                        Some(best) => {
+                            if is_minimize { cost < best } else { cost > best }
+                        }
+                    };
+                    if should_update {
+                        self.store.best_cost = Some(cost);
+                    }
+                }
+                out.push(solution);
+                return out.len() >= limit;
+            }
         };
         let domain: Vec<i64> = self.value_order(cell);
         for &v in &domain {
             let m = self.store.mark();
             if self.store.commit(cell, v).is_ok()
-                && self.registry.fixpoint(&mut self.store).is_ok()
-                && self.collect(out, limit) {
-                self.store.undo_to(m);
-                return true;
+                && self.registry.fixpoint(&mut self.store).is_ok() {
+                // NEW: Check if current cost bounds exceed best_cost -> prune
+                if let Some((cost_cell, is_minimize)) = self.store.objective {
+                    if let Some(best) = self.store.best_cost {
+                        if self.store.is_fixed(cost_cell) {
+                            let current_cost = self.store.value(cost_cell);
+                            if is_minimize && current_cost >= best {
+                                // Prune: cost can't improve
+                                self.store.undo_to(m);
+                                continue;
+                            } else if !is_minimize && current_cost <= best {
+                                // Prune: cost can't improve
+                                self.store.undo_to(m);
+                                continue;
+                            }
+                        }
+                    }
+                }
+                // Recurse
+                if self.collect(out, limit) {
+                    self.store.undo_to(m);
+                    return true;
+                }
             }
             self.store.undo_to(m);
         }
