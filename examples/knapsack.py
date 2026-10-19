@@ -91,3 +91,7 @@ def run():
     assert total_value >= 25  # Known lower bound for this instance
     print(f"knapsack: selected={selected}, value={total_value}, weight={total_weight}")
     return (selected, total_value)
+
+
+if __name__ == "__main__":
+    run()

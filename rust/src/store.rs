@@ -47,11 +47,13 @@ impl Domain {
     pub fn remove(&mut self, value: i64) -> bool {
         match self {
             Domain::Vec(ref mut vec) => {
-                if let Some(pos) = vec.iter().position(|&v| v == value) {
-                    vec.remove(pos);
-                    true
-                } else {
-                    false
+                // Domains are kept sorted, so binary_search beats a linear scan.
+                match vec.binary_search(&value) {
+                    Ok(pos) => {
+                        vec.remove(pos);
+                        true
+                    }
+                    Err(_) => false,
                 }
             }
         }
@@ -227,13 +229,17 @@ impl Store {
     }
 
     pub fn undo_to(&mut self, mark: usize) {
+        let mut affected: std::collections::HashSet<usize> = std::collections::HashSet::new();
         for (cell, value) in self.trail.drain(mark..).rev() {
-            // For Vec domains, we need to insert in sorted order
-            match &mut self.cells[cell] {
-                Domain::Vec(ref mut vec) => {
-                    vec.push(value);
-                    vec.sort();
-                }
+            if let Domain::Vec(ref mut vec) = &mut self.cells[cell] {
+                vec.push(value);
+                affected.insert(cell);
+            }
+        }
+        // Sort once per affected cell instead of after every pushed value.
+        for cell in affected {
+            if let Domain::Vec(ref mut vec) = &mut self.cells[cell] {
+                vec.sort();
             }
         }
         // Clear changed_vars when undoing to avoid stale state
