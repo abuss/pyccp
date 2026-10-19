@@ -44,6 +44,8 @@ pub trait Solver {
     fn commit(&mut self, cell: usize, value: i64) -> Result<(), Conflict>;
     fn is_fixed(&self, cell: usize) -> bool;
     fn value(&self, cell: usize) -> i64;
+    fn set_objective(&mut self, cell: usize, minimize: bool) -> Result<(), Conflict>;
+    fn best_cost(&self) -> Option<i64>;
 }
 
 pub struct CustomSolver {
@@ -102,6 +104,18 @@ impl Solver for CustomSolver {
 
     fn is_fixed(&self, cell: usize) -> bool { self.store.is_fixed(cell) }
     fn value(&self, cell: usize) -> i64 { self.store.value(cell) }
+
+    fn set_objective(&mut self, cell: usize, minimize: bool) -> Result<(), Conflict> {
+        if cell >= self.store.num_variables() {
+            return Err(Conflict);
+        }
+        self.store.objective = Some((cell, minimize));
+        Ok(())
+    }
+
+    fn best_cost(&self) -> Option<i64> {
+        self.store.best_cost
+    }
 }
 
 impl CustomSolver {

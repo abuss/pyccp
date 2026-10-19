@@ -117,6 +117,8 @@ pub struct Store {
     mrv_cache_valid: bool,
     bounds: std::vec::Vec<Bounds>,
     changed_vars: std::collections::HashSet<usize>,  // Track which variables changed
+    pub objective: Option<(usize, bool)>,            // (cell_index, is_minimize)
+    pub best_cost: Option<i64>,                      // best solution cost found so far
 }
 
 impl Store {
@@ -137,6 +139,8 @@ impl Store {
             mrv_cache_valid: false,
             bounds,
             changed_vars: std::collections::HashSet::new(),
+            objective: None,
+            best_cost: None,
         }
     }
 
