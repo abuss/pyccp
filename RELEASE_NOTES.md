@@ -11,9 +11,10 @@ Demonstrates branch-and-bound optimization by refactoring examples to compute co
 ### Key Highlights
 
 - **Knapsack Optimization**: LinearEq constraints compute value and weight in-solver; `set_objective()` enables B&B pruning to maximize value efficiently
+- **Multiple Knapsack Problem Example**: Flexible `run(filename)` API reads standard MKP benchmark format (n constraints, m items, values, capacities, constraint matrix)
 - **In-Solver Cost Patterns**: Documentation and worked examples show how to use LinearEq + LeLinear for constraint-based optimization
 - **LeLinear Constraint (v2.4)**: New constraint type for linear inequality bounds (sum(coeff*var) <= rhs), enabling capacity and resource constraints
-- **Performance**: 20-40% speedup on Knapsack vs. full enumeration (v2.3 external filtering) due to early B&B pruning
+- **Performance**: 20-40% speedup on Knapsack vs. full enumeration (v2.3 external filtering) due to early B&B pruning; Domain::remove O(N²)→O(N log N) fix for large domains
 - **Roadmap**: TSP deferred to v2.5 (requires multi-dimensional Element indexing); multi-objective and LP relaxation planned for v3
 
 ### Breaking Changes
@@ -28,19 +29,24 @@ See `docs/OPTIMIZATION.md` → "Advanced: In-Solver Cost Computation" for patter
 
 ### Testing & Verification
 
-All 41 tests passing:
+All 42 tests passing:
 - 23 legacy CSP examples (no regressions)
-- 3 optimization examples (TSP, Knapsack, Scheduling)
+- 4 optimization examples (TSP, Knapsack, Scheduling, MKP)
 - 5 optimization unit tests
 - 10 other tests
 
-Knapsack now computes value/weight in-solver; all solutions verified within known bounds (value=37, weight=15).
+Knapsack and MKP now compute value/weight in-solver; all solutions verified against known optimals (Knapsack value=37, MKP pet2=87061, pet3=4015).
 
 ### Known Limitations
 
+- **MKP Scalability**: Subset-sum domains explode for m > ~20 items (e.g., pb4.dat with 29 items); larger instances require bounds-based domains and propagators (planned for v2.5)
 - **TSP Cost**: Still computed externally (v2.5 will add multi-dimensional Element indexing)
 - **Single Objective**: No multi-objective (v3)
 - **No LP Relaxation**: Greedy B&B only (v3)
+
+### Internal Improvements
+
+- **Performance Fix**: `Domain::remove()` optimized from O(N²) to O(N log N) via binary_search; `undo_to()` now sorts once per cell instead of per-value removal. Significantly improves solver speed on large domains.
 
 ### What's Next (v2.5 & v3)
 
