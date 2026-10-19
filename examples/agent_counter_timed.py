@@ -1,5 +1,6 @@
 import asyncio
 import pyccp
+import time
 
 def run():
     async def main():
@@ -40,6 +41,7 @@ def run():
         await ports[0].commit(0)
         
         # Run agents repeatedly in the ring for 1 second
+        wall_start = time.time()
         start_time = asyncio.get_event_loop().time()
         iteration = 0
         
@@ -51,6 +53,9 @@ def run():
             except Exception:
                 break
         
+        wall_elapsed = time.time() - wall_start
+        async_elapsed = asyncio.get_event_loop().time() - start_time
+        
         # Clean up dispatcher
         d.cancel()
         try:
@@ -61,8 +66,8 @@ def run():
         # Report results
         message_count = len(counter)
         final = final_value[0]
-        print(f"agent_counter_timed: {message_count} messages in 1.0s, final value = {final}")
+        print(f"agent_counter_timed: {message_count} messages in {async_elapsed:.3f}s, final value = {final}")
         
-        return {"count": message_count, "final_value": final}
+        return {"count": message_count, "final_value": final, "elapsed": async_elapsed}
     
     return asyncio.run(main())
