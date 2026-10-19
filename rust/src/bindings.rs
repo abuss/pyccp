@@ -124,6 +124,16 @@ impl PyStore {
         }
         sol
     }
+
+    #[pyo3(signature = (cell, minimize = true))]
+    fn set_objective(&mut self, cell: usize, minimize: bool) -> PyResult<()> {
+        self.solver.set_objective(cell, minimize)
+            .map_err(|_| PyErr::new::<PyException, _>("set_objective failed: invalid cell"))
+    }
+
+    fn best_cost(&self) -> Option<i64> {
+        self.solver.best_cost()
+    }
 }
 
 impl PyStore {

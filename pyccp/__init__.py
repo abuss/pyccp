@@ -2,8 +2,10 @@
 incrementally: the dispatcher cannot run during a synchronous solve()."""
 import asyncio
 from queue import SimpleQueue
+from typing import Optional
 import pyccp_core
 from pyccp.dispatcher import dispatcher
+
 
 Conflict = pyccp_core.Conflict
 
@@ -72,6 +74,20 @@ class Store:
         while not self._queue.empty():
             cell, value = self._queue.get()
             self._apply(cell, value)
+
+    def set_objective(self, cell: int, minimize: bool = True) -> None:
+        """Set the optimization objective: minimize (True) or maximize (False) the value in cell.
+        
+        Args:
+            cell: Index of the cost cell
+            minimize: True to minimize, False to maximize
+        """
+        self._core.set_objective(cell, minimize)
+
+    def best_cost(self) -> Optional[int]:
+        """Return the best cost found so far, or None if no feasible solution yet."""
+        return self._core.best_cost()
+
 
 
 async def join(*agents):
