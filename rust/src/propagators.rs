@@ -50,6 +50,47 @@ pub fn should_use_ac4(vars: &[usize], store: &Store) -> bool {
     avg_domain_size <= AC4_DOMAIN_SIZE_THRESHOLD
 }
 
+/// Build the support structure for AC-4 constraint propagation.
+/// For each variable var_i and value a in domain[var_i]:
+///   - Find all (var_j, b) pairs where j ≠ i and b ≠ a
+///   - These pairs "support" the assignment (var_i, a) in AllDiff
+pub fn compute_support_map(
+    vars: &[usize],
+    store: &Store,
+) -> std::collections::HashMap<(usize, i64), Vec<(usize, i64)>> {
+    let mut support_map = std::collections::HashMap::new();
+    
+    // For each variable var_i in vars
+    for (i, &var_i) in vars.iter().enumerate() {
+        let domain_i = store.domain(var_i).to_vec();
+        
+        // For each value a in domain[var_i]
+        for &value_a in &domain_i {
+            let mut supports = Vec::new();
+            
+            // For each other variable var_j in vars where j ≠ i
+            for (j, &var_j) in vars.iter().enumerate() {
+                if i == j {
+                    continue; // Skip self
+                }
+                
+                let domain_j = store.domain(var_j).to_vec();
+                
+                // For each value b in domain[var_j] where b ≠ a
+                for &value_b in &domain_j {
+                    if value_b != value_a {
+                        supports.push((var_j, value_b));
+                    }
+                }
+            }
+            
+            support_map.insert((var_i, value_a), supports);
+        }
+    }
+    
+    support_map
+}
+
 pub trait Propagator: Send + Sync {
     fn cells(&self) -> &[usize];
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict>;
