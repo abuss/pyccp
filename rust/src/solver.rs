@@ -125,6 +125,10 @@ impl Solver for CustomSolver {
 }
 
 impl CustomSolver {
+    pub fn is_bounds_domain(&self, cell: usize) -> bool {
+        self.store.is_bounds_domain(cell)
+    }
+
     fn dfs(&mut self) -> Option<Vec<i64>> {
         if self.cancel.load(Ordering::Relaxed) { return None; }
         let cell = match self.store.first_open() {

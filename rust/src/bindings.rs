@@ -146,6 +146,11 @@ impl PyStore {
             .map_err(|_| PyErr::new::<PyException, _>("set_objective failed: invalid cell"))
     }
 
+    #[doc = "Check if a domain is represented as Bounds."]
+    fn check_bounds(&self, cell: i32) -> PyResult<bool> {
+        Ok(self.solver.is_bounds_domain(cell as usize))
+    }
+
     fn best_cost(&self) -> Option<i64> {
         self.solver.best_cost()
     }

@@ -222,6 +222,76 @@ This demonstrates the impact of in-solver cost computation: solver prunes branch
 
 See RELEASE_NOTES.md for the full v3 roadmap.
 
+## Advanced: Bounds-Based Domains for Large Problems (v2.5.1)
+
+### Overview
+
+v2.5.1 introduces `Domain::Bounds(min, max)` for large-capacity constraint problems. Instead of enumerating all values in a domain, Bounds stores only the interval boundaries, enabling O(1) space per domain regardless of capacity.
+
+**Typical use case:** Multiple Knapsack Problem (MKP) with large capacities. A single knapsack with capacity 55,000 requires a domain of 55,001 values — prohibitive in memory. Bounds represents this as O(1) interval [0, 55000].
+
+### When to Use Bounds
+
+Use Bounds-based domains when:
+
+1. **Domain size > 1000 values**: Memory becomes a bottleneck
+2. **Large capacity constraints**: Subset-sum, knapsack, or bin-packing problems
+3. **Tight coupling (many constraints)**: Bounds propagation is effective across linear constraints
+4. **Optimizing for runtime/memory**: Accept slightly less precise conflict detection for massive speedup
+
+Example problems: MKP with m ≥ 25 items, bin packing with 1000+ bin capacity, scheduling with large time horizons.
+
+### How It Works (Transparent API)
+
+**Good news:** No API changes. `Store::new()` automatically converts:
+
+```python
+from pyccp import Store
+
+# Example: MKP with large capacity (55,000)
+# Capacity domain would be 55,001 values if enumerated
+capacity_domain = list(range(55001))  # Huge!
+
+s = Store([capacity_domain, ...])  # Store::new() auto-converts
+# Internally: capacity uses Domain::Bounds(0, 55000) — O(1) memory
+# Smaller domains remain Vec for precision
+```
+
+**Detection:** Store inspects domain size at creation:
+- Domain > 1000 values → Auto-convert to Bounds
+- Domain ≤ 1000 values → Keep as Vec (full enumeration)
+
+### Performance Impact
+
+| Scenario | v2.4 | v2.5.1 | Benefit |
+|----------|------|--------|---------|
+| MKP pb4.dat (m=29, capacity=55000) | Out of Memory | <30s | ✅ Feasible |
+| Memory per capacity domain | 55,001 ints × 8B = 440KB | O(1) = 16B | ~27,500x |
+| Search pruning (B&B) | Fewer branches cut early | Same B&B logic | No regression |
+
+### Known Limitations
+
+1. **AllDiff Sparse Domains**: Bounds-based AllDiff cannot detect inconsistencies in sparse domains (e.g., {1, 3, 5, 7}). Acceptable trade-off — use AllDiff only on compact ranges or combined with other constraints.
+   
+2. **Threshold Tuning**: The 1000-value threshold may need adjustment based on your memory budget. Mark with a config constant if you need to tune.
+
+3. **Ceiling (Roadmap)**: Current B&B may saturate at m~35-40 items. Larger MKP instances benefit from LP relaxation (v3).
+
+### Example: MKP with Bounds Domains
+
+See [examples/mknapsack/mknapsack.py](../examples/mknapsack/mknapsack.py) for the full MKP solver, which automatically uses Bounds for large capacities.
+
+For performance analysis and benchmark results, see [BENCHMARK_REPORT_v2.5.1.md](../BENCHMARK_REPORT_v2.5.1.md).
+
+### Limitations & Roadmap
+
+- **Single Objective:** v2.5 supports one cost cell only (multi-objective in v3)
+- **Linear Costs:** Objective must be expressible via LinearEq (non-linear objectives in v3)
+- **No LP Relaxation:** B&B is greedy constraint-based (LP relaxation in v3)
+- **Element2D Only:** 3D+ indexing deferred to v3
+
+See RELEASE_NOTES.md for the full v3 roadmap.
+
 ## Limitations
 
 - **Single objective only**: Multi-objective optimization is not supported.

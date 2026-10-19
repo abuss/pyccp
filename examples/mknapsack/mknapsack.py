@@ -23,6 +23,12 @@ Example (pet2.dat):
   ...
   87061                            # known optimum
   PETERSEN 2                       # problem name
+
+v2.5.1 Bounds Optimization:
+  Large capacity domains (>1000 values) are automatically converted to 
+  compact Bounds representation in Store::new(). This reduces memory usage
+  and speeds up propagation significantly for large problems like pb4.dat.
+  The conversion is transparent to the API - no changes to constraint posting.
 """
 
 import os
