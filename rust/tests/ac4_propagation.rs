@@ -1,5 +1,5 @@
 use pyccp_core::store::Store;
-use pyccp_core::propagators::should_use_ac4;
+use pyccp_core::propagators::{should_use_ac4, AllDiffState, AllDiffAlgorithm, propagate_ac4};
 
 #[test]
 fn test_ac4_enabled_for_small_domains() {
@@ -77,4 +77,44 @@ fn test_support_map_no_self_support() {
             assert_ne!(var_i, var_j, "Variable {} should not support itself", var_i);
         }
     }
+}
+
+#[test]
+fn test_ac4_detects_no_support() {
+    // Setup: domains = [[1,2], [1], [1]]
+    // Constraint: AllDiff on all 3 variables
+    // Vars 1 and 2 must both be 1 → conflict with AllDiff
+    // AC-4 should prune value 1 from var 0 (no support from other vars)
+    let mut store = Store::new(&[vec![1, 2], vec![1], vec![1]]);
+    let vars = vec![0, 1, 2];
+    let mut state = AllDiffState {
+        algorithm: AllDiffAlgorithm::AC4,
+        vars: vars.clone(),
+        support_map: None,
+        supports_initialized: false,
+    };
+    
+    let result = propagate_ac4(&mut state, &mut store);
+    // AC-4 should succeed in pruning (0, 1) since it has no support
+    assert!(result.is_ok(), "AC-4 propagation should succeed");
+    // After pruning (0, 1), var 0 should only have domain [2]
+    assert_eq!(store.domain(0).to_vec(), &[2], "Var 0 should have domain {{2}} after pruning unsupported value 1");
+}
+
+#[test]
+fn test_ac4_detects_conflict() {
+    // Setup: domains = [[1], [1]]
+    // Constraint: AllDiff on 2 variables
+    // Both must be 1 → AllDiff violated → conflict
+    let mut store = Store::new(&[vec![1], vec![1]]);
+    let vars = vec![0, 1];
+    let mut state = AllDiffState {
+        algorithm: AllDiffAlgorithm::AC4,
+        vars: vars.clone(),
+        support_map: None,
+        supports_initialized: false,
+    };
+    
+    let result = propagate_ac4(&mut state, &mut store);
+    assert!(result.is_err(), "AC-4 should detect conflict when two vars must have same value");
 }

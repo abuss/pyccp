@@ -91,6 +91,62 @@ pub fn compute_support_map(
     support_map
 }
 
+/// AC-4 constraint propagation algorithm for AllDiff.
+/// Prunes unsupported values from domains using a pre-computed support structure.
+pub fn propagate_ac4(
+    state: &mut AllDiffState,
+    store: &mut Store,
+) -> Result<(), Conflict> {
+    // 1. Initialize support_map on first call
+    if !state.supports_initialized {
+        state.support_map = Some(compute_support_map(&state.vars, store));
+        state.supports_initialized = true;
+    }
+    
+    let support_map = state.support_map.as_ref().expect("support_map should be initialized");
+    
+    // 2. Initialize queue with all (var, value) pairs from all domains
+    let mut queue: std::collections::VecDeque<(usize, i64)> = std::collections::VecDeque::new();
+    for &var_i in &state.vars {
+        for &value_a in store.domain(var_i).iter() {
+            queue.push_back((var_i, value_a));
+        }
+    }
+    
+    // 3. Process queue
+    while let Some((var_i, value_a)) = queue.pop_front() {
+        // Check if value_a still exists in domain[var_i]
+        if !store.domain(var_i).contains(value_a) {
+            continue;
+        }
+        
+        // Check if value_a has support
+        let has_support = if let Some(supports) = support_map.get(&(var_i, value_a)) {
+            supports.iter().any(|(var_j, val_b)| {
+                store.domain(*var_j).contains(*val_b)
+            })
+        } else {
+            false
+        };
+        
+        // If value_a has no support, remove it
+        if !has_support {
+            store.remove(var_i, value_a)?;
+            
+            // Re-queue all values in other variables
+            for &var_k in &state.vars {
+                if var_k != var_i {
+                    for &val_c in store.domain(var_k).iter() {
+                        queue.push_back((var_k, val_c));
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 pub trait Propagator: Send + Sync {
     fn cells(&self) -> &[usize];
     fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict>;
