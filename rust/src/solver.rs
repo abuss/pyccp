@@ -1,4 +1,4 @@
-use crate::propagators::{AllDiff, And, Cardinality, Element, LeLinear, LinearEq, LessThan, Modulo, Multiply, NeqLinear, NonZero, Or, Propagator, Registry, Xor};
+use crate::propagators::{AllDiff, And, Cardinality, Element, Element2D, LeLinear, LinearEq, LessThan, Modulo, Multiply, NeqLinear, NonZero, Or, Propagator, Registry, Xor};
 use crate::store::{Conflict, Store};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,6 +13,7 @@ pub enum Constraint {
     LessThan(usize, usize),
     Multiply(usize, usize, i64),
     Element(Vec<usize>, usize, usize),
+    Element2D(Vec<usize>, usize, usize, usize, usize),  // array, row_var, col_var, result_var, ncols
     Cardinality(Vec<usize>, i64, usize),
     Modulo(usize, i64, i64),
     And(usize, usize, usize),
@@ -30,6 +31,7 @@ fn to_propagator(c: &Constraint) -> Box<dyn Propagator> {
         Constraint::LessThan(i, j) => Box::new(LessThan::new(*i, *j)),
         Constraint::Multiply(i, j, k) => Box::new(Multiply::new(*i, *j, *k)),
         Constraint::Element(a, i, y) => Box::new(Element::new(a.clone(), *i, *y)),
+        Constraint::Element2D(a, r, c, res, ncols) => Box::new(Element2D::new(a.clone(), *r, *c, *res, *ncols)),
         Constraint::Cardinality(c, v, n) => Box::new(Cardinality::new(c.clone(), *v, *n)),
         Constraint::Modulo(c, m, k) => Box::new(Modulo::new(*c, *m, *k)),
         Constraint::And(x, y, z) => Box::new(And::new(*x, *y, *z)),

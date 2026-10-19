@@ -54,6 +54,15 @@ fn parse_constraint(c: &Bound<'_, PyAny>, n: usize) -> PyResult<Constraint> {
             for &i in &array { check(i)?; }
             Ok(Constraint::Element(array, check(args.get_item(1)?.extract()?)?, check(args.get_item(2)?.extract()?)?))
         }
+        "element2d" => {
+            let array: Vec<usize> = args.get_item(0)?.extract()?;
+            for &i in &array { check(i)?; }
+            let row_var = check(args.get_item(1)?.extract()?)?;
+            let col_var = check(args.get_item(2)?.extract()?)?;
+            let result_var = check(args.get_item(3)?.extract()?)?;
+            let ncols: usize = args.get_item(4)?.extract()?;
+            Ok(Constraint::Element2D(array, row_var, col_var, result_var, ncols))
+        }
         "cardinality" => {
             let cells: Vec<usize> = args.get_item(0)?.extract()?;
             for &i in &cells { check(i)?; }

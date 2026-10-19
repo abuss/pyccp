@@ -1,0 +1,168 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.8, pytest-9.1.1, pluggy-1.7.0 -- /home/abuss/Work/devel/pyccp/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/abuss/Work/devel/pyccp
+configfile: pyproject.toml
+collecting ... collected 41 items
+
+tests/test_agents.py::test_join_runs_agents_concurrently PASSED          [  2%]
+tests/test_agents.py::test_choice_first_wins_and_cancels_pending PASSED  [  4%]
+tests/test_agents.py::test_conflict_raises_in_agent_mode PASSED          [  7%]
+tests/test_bridge.py::test_consumer_wakes_on_propagated_fix PASSED       [  9%]
+tests/test_bridge.py::test_read_suspends_until_fix PASSED                [ 12%]
+tests/test_examples.py::test_example[nqueens] PASSED                     [ 14%]
+tests/test_examples.py::test_example[send_more_money] PASSED             [ 17%]
+tests/test_examples.py::test_example[graph_coloring] PASSED              [ 19%]
+tests/test_examples.py::test_example[magic_square] PASSED                [ 21%]
+tests/test_examples.py::test_example[diophantine] PASSED                 [ 24%]
+tests/test_examples.py::test_example[modulo_filter] PASSED               [ 26%]
+tests/test_examples.py::test_example[simple] PASSED                      [ 29%]
+tests/test_examples.py::test_example[search] PASSED                      [ 31%]
+tests/test_examples.py::test_example[scaling] PASSED                     [ 34%]
+tests/test_examples.py::test_example[element] PASSED                     [ 36%]
+tests/test_examples.py::test_example[cardinality] PASSED                 [ 39%]
+tests/test_examples.py::test_example[boolean_logic] PASSED               [ 41%]
+tests/test_examples.py::test_example[cyclic] PASSED                      [ 43%]
+tests/test_examples.py::test_example[producer_consumer] PASSED           [ 46%]
+tests/test_examples.py::test_example[agent_counter] PASSED               [ 48%]
+tests/test_examples.py::test_example[agent_counter_random] PASSED        [ 51%]
+tests/test_examples.py::test_example[agent_counter_timed] PASSED         [ 53%]
+tests/test_examples.py::test_example[strategy_choice] PASSED             [ 56%]
+tests/test_examples.py::test_example[scheduling] PASSED                  [ 58%]
+tests/test_examples.py::test_example[knapsack] FAILED                    [ 60%]
+tests/test_examples.py::test_example[tsp] PASSED                         [ 63%]
+tests/test_integration.py::test_producer_propagator_consumer PASSED      [ 65%]
+tests/test_integration.py::test_undo_clears_mirror PASSED                [ 68%]
+tests/test_optimization.py::test_set_objective_stores_flag FAILED        [ 70%]
+tests/test_optimization.py::test_set_objective_invalid_cell_raises PASSED [ 73%]
+tests/test_optimization.py::test_best_cost_none_initially FAILED         [ 75%]
+tests/test_optimization.py::test_best_cost_updates_after_solve FAILED    [ 78%]
+tests/test_optimization.py::test_maximize_objective FAILED               [ 80%]
+tests/test_solve_all.py::test_solve_all_returns_all_pairs PASSED         [ 82%]
+tests/test_solve_all.py::test_solve_all_limit PASSED                     [ 85%]
+tests/test_store.py::test_send_more_money_through_ffi PASSED             [ 87%]
+tests/test_store.py::test_unknown_kind_raises PASSED                     [ 90%]
+tests/test_store.py::test_conflict_is_pyccp_exception PASSED             [ 92%]
+tests/test_store.py::test_out_of_bounds_cell_raises_value_error PASSED   [ 95%]
+tests/test_store.py::test_element_out_of_range_idx_raises_conflict PASSED [ 97%]
+tests/test_store.py::test_modulo_zero_divisor_raises_value_error PASSED  [100%]
+
+=================================== FAILURES ===================================
+____________________________ test_example[knapsack] ____________________________
+
+name = 'knapsack'
+
+    @pytest.mark.parametrize("name", EXAMPLES)
+    def test_example(name):
+        mod = importlib.import_module(f"examples.{name}")
+>       mod.run()
+
+tests/test_examples.py:16: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+examples/knapsack.py:51: in run
+    s.post(("le_linear", ([(weight_cell, 1)], capacity)))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pyccp.Store object at 0x7fd7408a4050>
+c = ('le_linear', ([(11, 1)], 15))
+
+    def post(self, c: tuple) -> None:
+>       self._core.post(c)
+E       ValueError: unknown kind: le_linear
+
+pyccp/__init__.py:49: ValueError
+________________________ test_set_objective_stores_flag ________________________
+
+    def test_set_objective_stores_flag():
+        s = pyccp.Store([list(range(1, 4))])
+>       s.set_objective(0, minimize=True)
+
+tests/test_optimization.py:6: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pyccp.Store object at 0x7fd7406f0b50>, cell = 0, minimize = True
+
+    def set_objective(self, cell: int, minimize: bool = True) -> None:
+        """Set the optimization objective: minimize (True) or maximize (False) the value in cell.
+    
+        Args:
+            cell: Index of the cost cell
+            minimize: True to minimize, False to maximize
+        """
+>       self._core.set_objective(cell, minimize)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'builtins.Store' object has no attribute 'set_objective'
+
+pyccp/__init__.py:85: AttributeError
+________________________ test_best_cost_none_initially _________________________
+
+    def test_best_cost_none_initially():
+        s = pyccp.Store([list(range(1, 4))])
+>       assert s.best_cost() is None
+               ^^^^^^^^^^^^^
+
+tests/test_optimization.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pyccp.Store object at 0x7fd7406f11d0>
+
+    def best_cost(self) -> Optional[int]:
+        """Return the best cost found so far, or None if no feasible solution yet."""
+>       return self._core.best_cost()
+               ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'builtins.Store' object has no attribute 'best_cost'
+
+pyccp/__init__.py:89: AttributeError
+______________________ test_best_cost_updates_after_solve ______________________
+
+    def test_best_cost_updates_after_solve():
+        s = pyccp.Store([list(range(1, 4))])
+>       s.set_objective(0, minimize=True)
+
+tests/test_optimization.py:26: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pyccp.Store object at 0x7fd7406f15d0>, cell = 0, minimize = True
+
+    def set_objective(self, cell: int, minimize: bool = True) -> None:
+        """Set the optimization objective: minimize (True) or maximize (False) the value in cell.
+    
+        Args:
+            cell: Index of the cost cell
+            minimize: True to minimize, False to maximize
+        """
+>       self._core.set_objective(cell, minimize)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'builtins.Store' object has no attribute 'set_objective'
+
+pyccp/__init__.py:85: AttributeError
+___________________________ test_maximize_objective ____________________________
+
+    def test_maximize_objective():
+        s = pyccp.Store([list(range(1, 4))])
+>       s.set_objective(0, minimize=False)
+
+tests/test_optimization.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pyccp.Store object at 0x7fd7406f0550>, cell = 0, minimize = False
+
+    def set_objective(self, cell: int, minimize: bool = True) -> None:
+        """Set the optimization objective: minimize (True) or maximize (False) the value in cell.
+    
+        Args:
+            cell: Index of the cost cell
+            minimize: True to minimize, False to maximize
+        """
+>       self._core.set_objective(cell, minimize)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'builtins.Store' object has no attribute 'set_objective'
+
+pyccp/__init__.py:85: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_examples.py::test_example[knapsack] - ValueError: unknown k...
+FAILED tests/test_optimization.py::test_set_objective_stores_flag - Attribute...
+FAILED tests/test_optimization.py::test_best_cost_none_initially - AttributeE...
+FAILED tests/test_optimization.py::test_best_cost_updates_after_solve - Attri...
+FAILED tests/test_optimization.py::test_maximize_objective - AttributeError: ...
+========================= 5 failed, 36 passed in 3.08s =========================

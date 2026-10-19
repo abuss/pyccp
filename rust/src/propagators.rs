@@ -490,6 +490,195 @@ impl Propagator for Element {
     }
 }
 
+pub struct Element2D { cells: Vec<usize>, array: Vec<usize>, row_var: usize, col_var: usize, result_var: usize, ncols: usize }
+impl Element2D {
+    pub fn new(array: Vec<usize>, row_var: usize, col_var: usize, result_var: usize, ncols: usize) -> Element2D {
+        let mut cells = array.clone();
+        cells.push(row_var);
+        cells.push(col_var);
+        cells.push(result_var);
+        Element2D { cells, array, row_var, col_var, result_var, ncols }
+    }
+}
+impl Propagator for Element2D {
+    fn cells(&self) -> &[usize] { &self.cells }
+    fn propagate(&mut self, store: &mut Store) -> Result<(), Conflict> {
+        let nrows = self.array.len() / self.ncols;
+        
+        // Both row_var and col_var fixed: compute index and fix result_var
+        if store.is_fixed(self.row_var) && store.is_fixed(self.col_var) {
+            let row = store.value(self.row_var) as usize;
+            let col = store.value(self.col_var) as usize;
+            
+            if row >= nrows || col >= self.ncols {
+                return Err(Conflict);
+            }
+            
+            let index = row * self.ncols + col;
+            let array_cell = self.array[index];
+            
+            if store.is_fixed(array_cell) {
+                store.commit(self.result_var, store.value(array_cell))?;
+            } else {
+                let arr_domain = store.domain(array_cell).to_vec();
+                for v in store.domain(self.result_var).to_vec() {
+                    if !arr_domain.contains(&v) {
+                        store.remove(self.result_var, v)?;
+                    }
+                }
+            }
+            return Ok(());
+        }
+        
+        // Result_var fixed: prune (row, col) pairs where array[row*ncols+col] != result_val
+        if store.is_fixed(self.result_var) {
+            let result_val = store.value(self.result_var);
+            
+            let row_domain: Vec<i64> = store.domain(self.row_var).to_vec();
+            for row_val in row_domain {
+                let row_usize = row_val as usize;
+                if row_usize >= nrows {
+                    store.remove(self.row_var, row_val)?;
+                    continue;
+                }
+                
+                let col_domain: Vec<i64> = store.domain(self.col_var).to_vec();
+                let mut found_valid_col = false;
+                for col_val in col_domain {
+                    let col_usize = col_val as usize;
+                    if col_usize >= self.ncols {
+                        store.remove(self.col_var, col_val)?;
+                        continue;
+                    }
+                    
+                    let index = row_usize * self.ncols + col_usize;
+                    let array_cell = self.array[index];
+                    
+                    if store.is_fixed(array_cell) {
+                        if store.value(array_cell) == result_val {
+                            found_valid_col = true;
+                        }
+                    } else {
+                        if store.domain(array_cell).contains(result_val) {
+                            found_valid_col = true;
+                        }
+                    }
+                }
+                
+                if !found_valid_col && store.domain(self.row_var).contains(row_val) {
+                    store.remove(self.row_var, row_val)?;
+                }
+            }
+            
+            // Also check columns: for each col, is there a valid row?
+            let col_domain: Vec<i64> = store.domain(self.col_var).to_vec();
+            for col_val in col_domain {
+                let col_usize = col_val as usize;
+                if col_usize >= self.ncols {
+                    store.remove(self.col_var, col_val)?;
+                    continue;
+                }
+                
+                let row_domain: Vec<i64> = store.domain(self.row_var).to_vec();
+                let mut found_valid_row = false;
+                for row_val in row_domain {
+                    let row_usize = row_val as usize;
+                    if row_usize >= nrows {
+                        continue;
+                    }
+                    
+                    let index = row_usize * self.ncols + col_usize;
+                    let array_cell = self.array[index];
+                    
+                    if store.is_fixed(array_cell) {
+                        if store.value(array_cell) == result_val {
+                            found_valid_row = true;
+                        }
+                    } else {
+                        if store.domain(array_cell).contains(result_val) {
+                            found_valid_row = true;
+                        }
+                    }
+                }
+                
+                if !found_valid_row && store.domain(self.col_var).contains(col_val) {
+                    store.remove(self.col_var, col_val)?;
+                }
+            }
+            return Ok(());
+        }
+        
+        // Both open: bounds-based pruning
+        let result_bounds = store.bounds(self.result_var);
+        
+        let row_domain: Vec<i64> = store.domain(self.row_var).to_vec();
+        for row_val in row_domain {
+            let row_usize = row_val as usize;
+            if row_usize >= nrows {
+                store.remove(self.row_var, row_val)?;
+                continue;
+            }
+            
+            let col_domain: Vec<i64> = store.domain(self.col_var).to_vec();
+            let mut found_valid_col = false;
+            for col_val in col_domain {
+                let col_usize = col_val as usize;
+                if col_usize >= self.ncols {
+                    store.remove(self.col_var, col_val)?;
+                    continue;
+                }
+                
+                let index = row_usize * self.ncols + col_usize;
+                let array_cell = self.array[index];
+                let arr_bounds = store.bounds(array_cell);
+                
+                // If array[row*ncols+col] can intersect with result_bounds, keep this col
+                if !(arr_bounds.max < result_bounds.min || arr_bounds.min > result_bounds.max) {
+                    found_valid_col = true;
+                }
+            }
+            
+            // If no valid col for this row, remove row
+            if !found_valid_col && store.domain(self.row_var).contains(row_val) {
+                store.remove(self.row_var, row_val)?;
+            }
+        }
+        
+        // Also check columns: for each col, is there a valid row?
+        let col_domain: Vec<i64> = store.domain(self.col_var).to_vec();
+        for col_val in col_domain {
+            let col_usize = col_val as usize;
+            if col_usize >= self.ncols {
+                store.remove(self.col_var, col_val)?;
+                continue;
+            }
+            
+            let row_domain: Vec<i64> = store.domain(self.row_var).to_vec();
+            let mut found_valid_row = false;
+            for row_val in row_domain {
+                let row_usize = row_val as usize;
+                if row_usize >= nrows {
+                    continue;
+                }
+                
+                let index = row_usize * self.ncols + col_usize;
+                let array_cell = self.array[index];
+                let arr_bounds = store.bounds(array_cell);
+                
+                if !(arr_bounds.max < result_bounds.min || arr_bounds.min > result_bounds.max) {
+                    found_valid_row = true;
+                }
+            }
+            
+            if !found_valid_row && store.domain(self.col_var).contains(col_val) {
+                store.remove(self.col_var, col_val)?;
+            }
+        }
+        
+        Ok(())
+    }
+}
+
 pub struct Cardinality { cells: Vec<usize>, value: i64, count: usize }
 impl Cardinality {
     pub fn new(cells: Vec<usize>, value: i64, count: usize) -> Cardinality {

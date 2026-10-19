@@ -1,0 +1,50 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.8, pytest-9.1.1, pluggy-1.7.0 -- /home/abuss/Work/devel/pyccp/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/abuss/Work/devel/pyccp
+configfile: pyproject.toml
+collecting ... collected 41 items
+
+tests/test_agents.py::test_join_runs_agents_concurrently PASSED          [  2%]
+tests/test_agents.py::test_choice_first_wins_and_cancels_pending PASSED  [  4%]
+tests/test_agents.py::test_conflict_raises_in_agent_mode PASSED          [  7%]
+tests/test_bridge.py::test_consumer_wakes_on_propagated_fix PASSED       [  9%]
+tests/test_bridge.py::test_read_suspends_until_fix PASSED                [ 12%]
+tests/test_examples.py::test_example[nqueens] PASSED                     [ 14%]
+tests/test_examples.py::test_example[send_more_money] PASSED             [ 17%]
+tests/test_examples.py::test_example[graph_coloring] PASSED              [ 19%]
+tests/test_examples.py::test_example[magic_square] PASSED                [ 21%]
+tests/test_examples.py::test_example[diophantine] PASSED                 [ 24%]
+tests/test_examples.py::test_example[modulo_filter] PASSED               [ 26%]
+tests/test_examples.py::test_example[simple] PASSED                      [ 29%]
+tests/test_examples.py::test_example[search] PASSED                      [ 31%]
+tests/test_examples.py::test_example[scaling] PASSED                     [ 34%]
+tests/test_examples.py::test_example[element] PASSED                     [ 36%]
+tests/test_examples.py::test_example[cardinality] PASSED                 [ 39%]
+tests/test_examples.py::test_example[boolean_logic] PASSED               [ 41%]
+tests/test_examples.py::test_example[cyclic] PASSED                      [ 43%]
+tests/test_examples.py::test_example[producer_consumer] PASSED           [ 46%]
+tests/test_examples.py::test_example[agent_counter] PASSED               [ 48%]
+tests/test_examples.py::test_example[agent_counter_random] PASSED        [ 51%]
+tests/test_examples.py::test_example[agent_counter_timed] PASSED         [ 53%]
+tests/test_examples.py::test_example[strategy_choice] PASSED             [ 56%]
+tests/test_examples.py::test_example[scheduling] PASSED                  [ 58%]
+tests/test_examples.py::test_example[knapsack] PASSED                    [ 60%]
+tests/test_examples.py::test_example[tsp] PASSED                         [ 63%]
+tests/test_integration.py::test_producer_propagator_consumer PASSED      [ 65%]
+tests/test_integration.py::test_undo_clears_mirror PASSED                [ 68%]
+tests/test_optimization.py::test_set_objective_stores_flag PASSED        [ 70%]
+tests/test_optimization.py::test_set_objective_invalid_cell_raises PASSED [ 73%]
+tests/test_optimization.py::test_best_cost_none_initially PASSED         [ 75%]
+tests/test_optimization.py::test_best_cost_updates_after_solve PASSED    [ 78%]
+tests/test_optimization.py::test_maximize_objective PASSED               [ 80%]
+tests/test_solve_all.py::test_solve_all_returns_all_pairs PASSED         [ 82%]
+tests/test_solve_all.py::test_solve_all_limit PASSED                     [ 85%]
+tests/test_store.py::test_send_more_money_through_ffi PASSED             [ 87%]
+tests/test_store.py::test_unknown_kind_raises PASSED                     [ 90%]
+tests/test_store.py::test_conflict_is_pyccp_exception PASSED             [ 92%]
+tests/test_store.py::test_out_of_bounds_cell_raises_value_error PASSED   [ 95%]
+tests/test_store.py::test_element_out_of_range_idx_raises_conflict PASSED [ 97%]
+tests/test_store.py::test_modulo_zero_divisor_raises_value_error PASSED  [100%]
+
+============================= 41 passed in 25.63s ==============================
