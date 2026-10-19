@@ -1,7 +1,10 @@
 use crate::store::{Conflict, Store};
 
 // AC-4 tuning constants
-const AC4_DOMAIN_SIZE_THRESHOLD: usize = 500;
+// ponytail: AC-4 disabled for now (domain_size_threshold = 0) due to fixpoint-loop bug
+// Multiple propagate() calls in fixpoint with stale support_map causes incorrect pruning
+// Re-enable after implementing proper incremental AC-4 or support_map refresh
+const AC4_DOMAIN_SIZE_THRESHOLD: usize = 0;
 const AC4_CONSTRAINT_DENSITY_MIN: usize = 2;
 const AC4_MAX_VARS: usize = 100;
 
@@ -17,7 +20,6 @@ pub struct AllDiffState {
     pub algorithm: AllDiffAlgorithm,
     pub vars: Vec<usize>,
     pub support_map: Option<std::collections::HashMap<(usize, i64), Vec<(usize, i64)>>>,
-    pub supports_initialized: bool,
 }
 
 // Heuristic to determine whether AC-4 should be used for AllDiff
@@ -98,9 +100,8 @@ pub fn propagate_ac4(
     store: &mut Store,
 ) -> Result<(), Conflict> {
     // 1. Initialize support_map on first call
-    if !state.supports_initialized {
+    if state.support_map.is_none() {
         state.support_map = Some(compute_support_map(&state.vars, store));
-        state.supports_initialized = true;
     }
     
     let support_map = state.support_map.as_ref().expect("support_map should be initialized");
@@ -299,7 +300,6 @@ impl AllDiff {
                 algorithm,
                 vars: cells,
                 support_map: None,
-                supports_initialized: false,
             },
         }
     }
